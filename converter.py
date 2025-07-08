@@ -20,7 +20,7 @@ class ConverterPage(QWidget):
         # input label (top, smaller)
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
-        self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold;")
+        self.input_label.setStyleSheet("font-size:34px; color:#444444;")
         layout.addWidget(self.input_label)
 
         # switch-direction button centred under input
@@ -45,7 +45,7 @@ class ConverterPage(QWidget):
         # output label (bottom, larger)
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
-        self.output_label.setStyleSheet("font-size:36px; color:#444;")
+        self.output_label.setStyleSheet("font-size:36px; color:#444444;")
         layout.addWidget(self.output_label)
 
         layout.addStretch()
