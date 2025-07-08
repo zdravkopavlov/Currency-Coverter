@@ -9,17 +9,18 @@ class CarouselWidget(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setWindowTitle("BGN/EUR Converter")
-        self.resize(400, 300)
+        self.resize(400, 340)
         self.setStyleSheet("background: #fafafa; border-radius: 24px;")
 
         self.pages = QStackedWidget()
         for page in pages:
             self.pages.addWidget(page)
 
+        # ---- Dots ----
         self.button_group = QButtonGroup(self)
         self.indicator_layout = QHBoxLayout()
         self.indicator_layout.setSpacing(2)
-        self.indicator_layout.setContentsMargins(0, 0, 0, 0)
+        self.indicator_layout.setContentsMargins(0, 6, 0, 0)
         self.indicator_layout.addStretch()
         self.indicators = []
         for i in range(len(pages)):
@@ -49,13 +50,15 @@ class CarouselWidget(QWidget):
         self.indicators[0].setChecked(True)
         self.button_group.buttonClicked[int].connect(self.go_to_page)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.pages)
-        layout.addLayout(self.indicator_layout)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
+        # ---- Layout ----
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 12)   # bottom from 18 → 12
+        self.indicator_layout.setContentsMargins(0, 0, 0, 4)
+        main_layout.setSpacing(4)
+        main_layout.addWidget(self.pages)
+        main_layout.addLayout(self.indicator_layout)
 
-        # Fade effect
+        # ---- Fade effect on content only ----
         self.fade_effect = QGraphicsOpacityEffect()
         self.pages.setGraphicsEffect(self.fade_effect)
         self.anim = QPropertyAnimation(self.fade_effect, b"opacity")
@@ -64,7 +67,7 @@ class CarouselWidget(QWidget):
         self._target_index = 0
         self.anim.finished.connect(self._do_switch_page)
 
-        # Draggable logic
+        # ---- Draggable logic ----
         self.dragging = False
 
     def go_to_page(self, index):

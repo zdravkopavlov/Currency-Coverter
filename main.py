@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIcon
 from carousel import CarouselWidget
+print("Carousel loaded from:", CarouselWidget.__module__)
 from converter import ConverterPage
 from settings import SettingsPage
 from about import AboutPage
