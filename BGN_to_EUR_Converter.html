@@ -1,0 +1,56 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BGN to EUR Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background: #f9f9f9;
+        }
+        .container {
+            max-width: 400px;
+            margin: auto;
+            padding: 25px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 0 12px rgba(0,0,0,0.1);
+        }
+        input, output {
+            font-size: 1.2em;
+            padding: 10px;
+            margin-top: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        label {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <label for="bgnInput">Enter amount in BGN:</label>
+        <input type="number" id="bgnInput" placeholder="e.g. 100.00" step="0.01" oninput="convertToEUR()">
+        <label for="eurOutput">EUR:</label>
+        <output id="eurOutput">€0.00</output>
+    </div>
+
+    <script>
+        const rate = 1.95583;
+
+        function convertToEUR() {
+            let bgn = parseFloat(document.getElementById('bgnInput').value);
+            if (isNaN(bgn)) {
+                document.getElementById('eurOutput').textContent = "€0.00";
+                return;
+            }
+            let eur = bgn / rate;
+            let rounded = Math.round(eur * 100) / 100;
+            document.getElementById('eurOutput').textContent = "€" + rounded.toFixed(2);
+        }
+    </script>
+</body>
+</html>
