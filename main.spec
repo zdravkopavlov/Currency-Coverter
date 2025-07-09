@@ -1,3 +1,5 @@
+# -*- mode: python ; coding: utf-8 -*-
+
 block_cipher = None
 
 a = Analysis(
@@ -23,13 +25,13 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='BGN_EUR_Converter',
+    name='BGNEURConverter',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     console=False,
-    icon='icon.ico',
+    icon='icon.ico'
 )
 
 coll = COLLECT(
@@ -39,6 +41,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    name='BGN_EUR_Converter'
+    name='Строймаркет_Цаковв_BGNEUR_коневртор'
 )

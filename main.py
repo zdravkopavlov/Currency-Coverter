@@ -19,7 +19,7 @@ try:
 except ImportError:
     IS_WINDOWS = False
 
-LOCKFILE_NAME = 'bgn_eur_converter_qt.mutex'
+LOCKFILE_NAME = 'bgn_eur_converter_qt.lock'
 lock_file = None
 
 def acquire_lock():
@@ -293,6 +293,45 @@ def main():
 
     window = ConverterWindow(tray, settings)
 
+def main():
+    if not acquire_lock():
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle("BGN/EUR Конвертор")
+        msg.setText("Конверторът вече работи.")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        sys.exit(0)
+
+    settings = load_settings()
+    app = QApplication(sys.argv)
+
+    # --------- ICON LOGIC ---------
+    import ctypes
+    app_id = "stoimarket.currency.converter"
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except Exception:
+        pass
+
+    icon_path = os.path.join(os.path.dirname(sys.argv[0]), "icon.ico")
+    icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
+
+    app.setWindowIcon(icon)                 # For taskbar, dialogs, etc.
+
+    tray = QSystemTrayIcon(icon, app)
+    tray.setToolTip("BGN/EUR Конвертор")
+
+    menu = QMenu()
+    restore_action = QAction("Покажи", tray)
+    quit_action = QAction("Изход", tray)
+    menu.addAction(restore_action)
+    menu.addAction(quit_action)
+    tray.setContextMenu(menu)
+
+    window = ConverterWindow(tray, settings)
+    window.setWindowIcon(icon)              # Explicit for alt-tab/taskbar
+
     def show_and_raise():
         window.show()
         window.activateWindow()
@@ -317,6 +356,7 @@ def main():
     window.show()
     window.setFocus()
     sys.exit(app.exec_())
+
 
 if __name__ == "__main__":
     main()
