@@ -314,7 +314,13 @@ def main():
     except Exception:
         pass
 
-    icon_path = os.path.join(os.path.dirname(sys.argv[0]), "icon.ico")
+    # Use resource_path to be compatible with PyInstaller!
+    def resource_path(filename):
+        if hasattr(sys, '_MEIPASS'):
+            return os.path.join(sys._MEIPASS, filename)
+        return os.path.join(os.path.dirname(sys.argv[0]), filename)
+
+    icon_path = resource_path("icon.ico")
     icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
 
     app.setWindowIcon(icon)                 # For taskbar, dialogs, etc.
