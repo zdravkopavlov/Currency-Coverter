@@ -46,18 +46,28 @@ def release_lock():
         except Exception:
             pass
 
+def get_user_settings_path():
+    # Get the user's AppData\Roaming folder (always writable)
+    appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+    settings_folder = os.path.join(appdata, "BGN_EUR_Converter")
+    if not os.path.exists(settings_folder):
+        os.makedirs(settings_folder)
+    return os.path.join(settings_folder, "settings.json")
+
 def load_settings():
-    if os.path.exists(SETTINGS_FILE):
+    path = get_user_settings_path()
+    if os.path.exists(path):
         try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
     return {}
 
 def save_settings(pos, minimal_mode):
+    path = get_user_settings_path()
     try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump({
                 "x": pos.x(),
                 "y": pos.y(),

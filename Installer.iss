@@ -1,5 +1,5 @@
-#define MyAppName "BGN_EUR_Converter.exe"
-#define MyAppVersion "2.0.0"
+#define MyAppName "Строймаркет Цаков BGN-EUR Конвертор"
+#define MyAppVersion "2.0.1"
 #define MyAppPublisher "Здравко Павлов \ BunchVFX"
 #define MyAppURL ""
 #define MyAppExeName "BGN_EUR_Converter.exe"
