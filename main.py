@@ -85,7 +85,7 @@ class ConverterWindow(QWidget):
         # --- UI elements (shared) ---
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
-        self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold;")
+        self.input_label.setStyleSheet("font-size:24px; color:#888; font-family:'Arial'; font-weight:bold;")
 
         self.switch_button = QPushButton("⇄")
         self.switch_button.setFixedSize(48, 48)
@@ -98,11 +98,11 @@ class ConverterWindow(QWidget):
 
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
-        self.output_label.setStyleSheet("font-size:36px; color:#444;")
+        self.output_label.setStyleSheet("font-size:24px; color:#888; font-family:'Arial'; font-weight:bold;")
 
         # --- Single main layout ---
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(24, 24, 24, 24)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
         self.main_layout.setSpacing(12)
 
         # Set initial mode/layout
@@ -124,20 +124,36 @@ class ConverterWindow(QWidget):
             if w is not None:
                 w.setParent(None)
             else:
-                # For layouts
                 del item
 
         if minimal:
-            self.setFixedSize(400, 90)
+            self.setFixedSize(300, 50)  # Even shorter!
             h_layout = QHBoxLayout()
-            h_layout.setSpacing(12)
+            h_layout.setSpacing(8)
             h_layout.setContentsMargins(0, 0, 0, 0)
+            # --- Shrink fonts and button for compact mode ---
+            self.input_label.setStyleSheet("font-size:22px; color:#888; font-weight:bold; font-family:'Arial';")
+            self.input_label.setFixedHeight(26) 
+            self.output_label.setStyleSheet("font-size:22px; color:#888; font-weight:bold; font-family:'Arial';")
+            self.output_label.setFixedHeight(26)
+            self.switch_button.setFixedSize(16, 16)
+            self.switch_button.setStyleSheet(
+                "QPushButton {font-size:15px; color:#888; border:none; background:#eeeeee; border-radius:8px;}"
+                "QPushButton:hover {background:#cccccc;}"
+            )
             h_layout.addWidget(self.input_label)
             h_layout.addWidget(self.switch_button)
             h_layout.addWidget(self.output_label)
             self.main_layout.addLayout(h_layout)
         else:
             self.setFixedSize(250, 220)
+            self.input_label.setStyleSheet("font-size:24px; color:#888;  font-weight:bold; font-family:'Arial';")
+            self.output_label.setStyleSheet("font-size:36px; color:#888; font-weight:bold; font-family:'Arial';")
+            self.switch_button.setFixedSize(48, 48)
+            self.switch_button.setStyleSheet(
+                "QPushButton {font-size:32px; color:#888; border:none; background:#eeeeee; border-radius:24px;}"
+                "QPushButton:hover {background:#cccccc;}"
+            )
             self.main_layout.addWidget(self.input_label)
             btn_layout = QHBoxLayout()
             btn_layout.addStretch()
