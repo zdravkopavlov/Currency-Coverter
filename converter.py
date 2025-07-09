@@ -3,7 +3,6 @@ from PyQt5.QtCore import Qt
 
 EXCHANGE_RATE = 1.95583
 
-
 class ConverterPage(QWidget):
     """BGN ⇄ EUR live converter page (keyboard-only input)."""
 
@@ -11,24 +10,21 @@ class ConverterPage(QWidget):
         super().__init__()
 
         self.input_value = ""
-        self.bgn_to_eur = True            # True → BGN→EUR, False → EUR→BGN
+        self.bgn_to_eur = True
 
-        # ---------- layout ----------
+        # Layout
         layout = QVBoxLayout(self)
         layout.addStretch()
 
-        # input label (top, smaller)
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
-        self.input_label.setStyleSheet("font-size:34px; color:#444444;")
+        self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold;")
         layout.addWidget(self.input_label)
 
-        # switch-direction button centred under input
+        # Switch button
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-
-        self.switch_button = QPushButton("⇄")         # create first
-        # style & size
+        self.switch_button = QPushButton("⇄")
         self.switch_button.setStyleSheet(
             "QPushButton {font-size:32px; color:#888; border:none; background:#eeeeee; "
             "border-radius:24px;} "
@@ -37,23 +33,18 @@ class ConverterPage(QWidget):
         self.switch_button.setFixedSize(48, 48)
         self.switch_button.setCursor(Qt.PointingHandCursor)
         self.switch_button.clicked.connect(self.toggle_direction)
-
         btn_layout.addWidget(self.switch_button)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
-        # output label (bottom, larger)
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
-        self.output_label.setStyleSheet("font-size:36px; color:#444444;")
+        self.output_label.setStyleSheet("font-size:36px; color:#444;")
         layout.addWidget(self.output_label)
-
         layout.addStretch()
 
-        # ensure keyboard focus for keyPressEvent
         self.setFocusPolicy(Qt.StrongFocus)
 
-    # ---------- logic ----------
     def toggle_direction(self):
         self.bgn_to_eur = not self.bgn_to_eur
         self.input_value = ""
@@ -84,3 +75,12 @@ class ConverterPage(QWidget):
             self.input_label.setText(f"€{val:.2f}")
             bgn = round(val * EXCHANGE_RATE + 1e-8, 2)
             self.output_label.setText(f"{bgn:.2f} лв.")
+
+    # For Escape handling from the carousel
+    def clear_if_not_zero(self):
+        """Returns True if cleared, False if already zeroed."""
+        if self.input_value and float(self.input_value or 0) != 0:
+            self.input_value = ""
+            self.update_labels()
+            return True
+        return False
