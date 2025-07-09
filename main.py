@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import tempfile
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -9,6 +10,7 @@ from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush
 from PyQt5.QtCore import Qt, QPoint, QRectF
 
 EXCHANGE_RATE = 1.95583
+SETTINGS_FILE = "settings.json"
 
 # --- One Instance Lock (Windows only) ---
 try:
@@ -44,33 +46,47 @@ def release_lock():
         except Exception:
             pass
 
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_settings(pos, minimal_mode):
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "x": pos.x(),
+                "y": pos.y(),
+                "minimal_mode": minimal_mode
+            }, f)
+    except Exception:
+        pass
+
 class ConverterWindow(QWidget):
-    def __init__(self, tray):
+    def __init__(self, tray, settings):
         super().__init__()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setWindowTitle("BGN/EUR Конвертор")
-        self.resize(250, 220)
         self.tray_icon = tray
 
-        # --- Converter State ---
+        # --- State ---
         self.input_value = ""
         self.bgn_to_eur = True
         self.dragging = False
         self.drag_position = QPoint()
+        self.minimal_mode = settings.get("minimal_mode", False)
+        self.last_clipboard = ""
 
-        # --- UI ---
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(12)
-
+        # --- UI elements (shared) ---
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
         self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold;")
-        layout.addWidget(self.input_label)
 
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
         self.switch_button = QPushButton("⇄")
         self.switch_button.setFixedSize(48, 48)
         self.switch_button.setStyleSheet(
@@ -79,18 +95,57 @@ class ConverterWindow(QWidget):
         )
         self.switch_button.setCursor(Qt.PointingHandCursor)
         self.switch_button.clicked.connect(self.toggle_direction)
-        btn_layout.addWidget(self.switch_button)
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
 
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
         self.output_label.setStyleSheet("font-size:36px; color:#444;")
-        layout.addWidget(self.output_label)
 
-        self.setLayout(layout)
+        # --- Single main layout ---
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(24, 24, 24, 24)
+        self.main_layout.setSpacing(12)
+
+        # Set initial mode/layout
+        self.set_mode(self.minimal_mode)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
+
+        # --- Restore window position if available ---
+        x, y = settings.get("x"), settings.get("y")
+        if x is not None and y is not None:
+            self.move(x, y)
+
+    def set_mode(self, minimal):
+        self.minimal_mode = minimal
+        # Remove everything from the main_layout
+        while self.main_layout.count():
+            item = self.main_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+            else:
+                # For layouts
+                del item
+
+        if minimal:
+            self.setFixedSize(400, 90)
+            h_layout = QHBoxLayout()
+            h_layout.setSpacing(12)
+            h_layout.setContentsMargins(0, 0, 0, 0)
+            h_layout.addWidget(self.input_label)
+            h_layout.addWidget(self.switch_button)
+            h_layout.addWidget(self.output_label)
+            self.main_layout.addLayout(h_layout)
+        else:
+            self.setFixedSize(250, 220)
+            self.main_layout.addWidget(self.input_label)
+            btn_layout = QHBoxLayout()
+            btn_layout.addStretch()
+            btn_layout.addWidget(self.switch_button)
+            btn_layout.addStretch()
+            self.main_layout.addLayout(btn_layout)
+            self.main_layout.addWidget(self.output_label)
+        self.update_labels()
 
     # --- Drawing the rounded panel ---
     def paintEvent(self, event):
@@ -129,7 +184,6 @@ class ConverterWindow(QWidget):
                 self.input_value += '.'
                 self.update_labels()
         elif key == Qt.Key_Escape:
-            # If not already cleared, clear value
             if self.input_value and float(self.input_value or 0) != 0:
                 self.input_value = ""
                 self.update_labels()
@@ -144,10 +198,12 @@ class ConverterWindow(QWidget):
                     )
         elif key == Qt.Key_A and not event.modifiers():
             self.toggle_always_on_top()
+        elif key == Qt.Key_M and not event.modifiers():
+            self.set_mode(not self.minimal_mode)
         else:
             super().keyPressEvent(event)
 
-    # --- Conversion logic ---
+    # --- Conversion logic + auto clipboard ---
     def toggle_direction(self):
         self.bgn_to_eur = not self.bgn_to_eur
         self.input_value = ""
@@ -161,11 +217,18 @@ class ConverterWindow(QWidget):
         if self.bgn_to_eur:
             self.input_label.setText(f"{val:.2f} лв.")
             eur = round(val / EXCHANGE_RATE + 1e-8, 2)
-            self.output_label.setText(f"€{eur:.2f}")
+            output = f"{eur:.2f}"
+            self.output_label.setText(f"€{output}")
         else:
             self.input_label.setText(f"€{val:.2f}")
             bgn = round(val * EXCHANGE_RATE + 1e-8, 2)
-            self.output_label.setText(f"{bgn:.2f} лв.")
+            output = f"{bgn:.2f}"
+            self.output_label.setText(f"{output} лв.")
+        # Auto-copy output value (not currency symbol)
+        clipboard = QApplication.clipboard()
+        if output != self.last_clipboard:
+            clipboard.setText(output)
+            self.last_clipboard = output
 
     # --- Always-on-top toggle ---
     def toggle_always_on_top(self):
@@ -198,6 +261,7 @@ def main():
         msg.exec_()
         sys.exit(0)
 
+    settings = load_settings()
     app = QApplication(sys.argv)
     icon = QIcon("icon.ico") if os.path.exists("icon.ico") else QIcon()
 
@@ -211,7 +275,7 @@ def main():
     menu.addAction(quit_action)
     tray.setContextMenu(menu)
 
-    window = ConverterWindow(tray)
+    window = ConverterWindow(tray, settings)
 
     def show_and_raise():
         window.show()
@@ -226,8 +290,10 @@ def main():
     )
     tray.show()
 
-    # Ensure lock release on exit
+    # Save window position & layout on exit
     def cleanup():
+        pos = window.pos()
+        save_settings(pos, window.minimal_mode)
         release_lock()
         app.quit()
     app.aboutToQuit.connect(cleanup)
