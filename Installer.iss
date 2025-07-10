@@ -1,5 +1,5 @@
 #define MyAppName "Строймаркет Цаков BGN-EUR Конвертор"
-#define MyAppVersion "2.0.1"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "Здравко Павлов \ BunchVFX"
 #define MyAppURL ""
 #define MyAppExeName "BGN_EUR_Converter.exe"
@@ -17,7 +17,7 @@ DefaultGroupName={#MyAppName}
 SetupIconFile=D:\PERSONAL\STROIMARKET\TOOLS\Currency Coverter\icon.ico
 UninstallDisplayIcon=D:\PERSONAL\STROIMARKET\TOOLS\Currency Coverter\icon.ico
 OutputDir=./installer
-OutputBaseFilename=BGN-EUR_Converter_Installer
+OutputBaseFilename=BGN-EUR_Converter_Setup_{#MyAppVersion}
 Compression=lzma
 SolidCompression=yes
 CreateAppDir=yes
@@ -37,6 +37,8 @@ Name: "runonstartup"; Description: "Стартирай автоматично с
 Source: "D:\PERSONAL\STROIMARKET\TOOLS\Currency Coverter\dist\BGN_EUR_Converter\BGN_EUR_Converter.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "D:\PERSONAL\STROIMARKET\TOOLS\Currency Coverter\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "D:\PERSONAL\STROIMARKET\TOOLS\Currency Coverter\dist\BGN_EUR_Converter\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "D:\PERSONAL\STROIMARKET\TOOLS\Currency Coverter\Documentation\*"; DestDir: "{app}\Documentation"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 ; Optional: add settings.json if you want user settings to persist through uninstall/reinstall
 
 [Icons]
