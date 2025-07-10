@@ -2,49 +2,17 @@ import sys
 import os
 import json
 import tempfile
+import markdown  # pip install markdown
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
-    QSystemTrayIcon, QMenu, QAction, QMessageBox, QDialog, QTabWidget, QTextEdit,
+    QSystemTrayIcon, QMenu, QAction, QMessageBox, QDialog, QTabWidget, QTextBrowser,
     QCheckBox, QComboBox, QSpacerItem, QSizePolicy
 )
-from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush
-from PyQt5.QtCore import Qt, QPoint, QRectF
+from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush, QMouseEvent
+from PyQt5.QtCore import Qt, QPoint, QRectF, QTimer
 
-VERSION = "2.0.2 beta"
+VERSION = "2.0.2"
 EXCHANGE_RATE = 1.95583
-
-try:
-    import msvcrt
-    IS_WINDOWS = True
-except ImportError:
-    IS_WINDOWS = False
-
-LOCKFILE_NAME = 'bgn_eur_converter.lock'
-lock_file = None
-
-def acquire_lock():
-    if not IS_WINDOWS:
-        return True
-    global lock_file
-    lock_path = os.path.join(tempfile.gettempdir(), LOCKFILE_NAME)
-    try:
-        lock_file = open(lock_path, 'w')
-        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
-        return True
-    except (OSError, IOError):
-        return False
-
-def release_lock():
-    if not IS_WINDOWS:
-        return
-    global lock_file
-    if lock_file:
-        try:
-            msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
-            lock_file.close()
-            os.remove(lock_file.name)
-        except Exception:
-            pass
 
 def get_user_settings_path():
     appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
@@ -61,12 +29,11 @@ def load_settings():
                 return json.load(f)
         except Exception:
             pass
-    # Defaults
     return {
         "start_with_windows": False,
         "start_minimized": True,
         "always_on_top": True,
-        "theme": 2,  # 0 = Light, 1 = Dark, 2 = Follow Windows
+        "theme": 2,
         "auto_check_updates": True,
         "auto_copy_result": True,
         "remember_last_direction": True,
@@ -84,6 +51,55 @@ def save_settings(settings):
     except Exception:
         pass
 
+def get_theme(settings):
+    idx = settings.get("theme", 2)
+    if idx == 2:
+        if sys.platform == "win32":
+            try:
+                import winreg
+                key = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as regkey:
+                    val, _ = winreg.QueryValueEx(regkey, "AppsUseLightTheme")
+                return "light" if val == 1 else "dark"
+            except Exception:
+                return "light"
+        return "light"
+    return "light" if idx == 0 else "dark"
+
+def doc_path(filename):
+    base = os.path.dirname(os.path.abspath(sys.argv[0]))
+    return os.path.join(base, "Documentation", filename)
+
+def load_markdown_html(filepath, theme="light"):
+    try:
+        with open(filepath, encoding="utf-8") as f:
+            md_text = f.read()
+        html = markdown.markdown(md_text, extensions=["extra", "tables", "sane_lists"])
+    except Exception:
+        html = "<i>Документът не е наличен.</i>"
+    if theme == "dark":
+        css = """
+        <style>
+        body { background: #23272e; color: #e0e0e0; font-family: Arial, sans-serif; }
+        h1, h2, h3, h4, h5 { color: #fafafa; }
+        code, pre { background: #181a20; color: #fff; border-radius: 4px; padding: 1px 4px; }
+        a { color: #8ab4f8; }
+        ul, ol { margin-left: 20px; }
+        </style>
+        """
+    else:
+        css = """
+        <style>
+        body { background: #fafafa; color: #2b2b2b; font-family: Arial, sans-serif; }
+        h1, h2, h3, h4, h5 { color: #222; }
+        code, pre { background: #f1f1f1; color: #222; border-radius: 4px; padding: 1px 4px; }
+        a { color: #1a0dab; }
+        ul, ol { margin-left: 20px; }
+        </style>
+        """
+    html = css + html
+    return html
+
 class SettingsTab(QWidget):
     def __init__(self, app_settings, on_settings_changed):
         super().__init__()
@@ -94,46 +110,39 @@ class SettingsTab(QWidget):
         layout.setSpacing(12)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        # Start with Windows
         self.chk_start_windows = QCheckBox("Стартирай с Windows")
         self.chk_start_windows.setChecked(app_settings.get("start_with_windows", False))
         self.chk_start_windows.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_start_windows)
 
-        # Start minimized
         self.chk_start_minimized = QCheckBox("Стартирай минимизиран")
         self.chk_start_minimized.setChecked(app_settings.get("start_minimized", True))
         self.chk_start_minimized.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_start_minimized)
 
-        # Always on top
         self.chk_always_on_top = QCheckBox("Винаги най-отгоре")
         self.chk_always_on_top.setChecked(app_settings.get("always_on_top", True))
         self.chk_always_on_top.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_always_on_top)
 
-        # Theme (dropdown)
         lbl_theme = QLabel("Тема:")
         layout.addWidget(lbl_theme)
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Светла", "Тъмна", "Следвай Windows"])
-        self.theme_combo.setCurrentIndex(app_settings.get("theme", 2))  # 2 = Follow Windows
+        self.theme_combo.setCurrentIndex(app_settings.get("theme", 2))
         self.theme_combo.currentIndexChanged.connect(self.save_settings)
         layout.addWidget(self.theme_combo)
 
-        # Auto check for updates
         self.chk_auto_check_updates = QCheckBox("Автоматична проверка за обновления")
         self.chk_auto_check_updates.setChecked(app_settings.get("auto_check_updates", True))
         self.chk_auto_check_updates.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_auto_check_updates)
 
-        # Auto copy result
         self.chk_auto_copy_result = QCheckBox("Автоматично копирай резултата")
         self.chk_auto_copy_result.setChecked(app_settings.get("auto_copy_result", True))
         self.chk_auto_copy_result.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_auto_copy_result)
 
-        # Remember last direction
         self.chk_remember_last_direction = QCheckBox("Запомни последната посока на конвертиране")
         self.chk_remember_last_direction.setChecked(app_settings.get("remember_last_direction", True))
         self.chk_remember_last_direction.stateChanged.connect(self.save_settings)
@@ -157,47 +166,32 @@ class InfoDialog(QDialog):
     def __init__(self, parent=None, app_settings=None, on_settings_changed=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setModal(True)
-        self.setFixedSize(460, 420)
+        self.setModal(False)
+        self.setFixedSize(520, 540)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-        # --- Close "X" label ---
-        self.close_label = QLabel("✕", self)
-        self.close_label.setStyleSheet("""
-            QLabel {
-                color: #aaa;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 0 2px 0 2px;
-                background: transparent;
-            }
-            QLabel:hover {
-                color: #e43;
-            }
-        """)
-        self.close_label.setFixedSize(24, 24)
-        self.close_label.setAlignment(Qt.AlignCenter)
-        self.close_label.setCursor(Qt.PointingHandCursor)
-        self.close_label.mousePressEvent = self.close_label_mouse_press
+        theme = get_theme(app_settings)
 
-        # --- TABBED CONTENT ---
         self.tabs = QTabWidget(self)
         self.tabs.setStyleSheet("""
-            QTabBar::tab { height: 28px; width: 130px; font-size: 13px; }
+            QTabBar::tab { height: 28px; width: 140px; font-size: 13px; }
             QTabWidget::pane { border: none; background: transparent; }
         """)
-        about_text = QTextEdit()
-        about_text.setReadOnly(True)
-        about_text.setStyleSheet("background: transparent; border: none;")
-        try:
-            with open("about.txt", encoding="utf-8") as f:
-                about_text.setPlainText(f.read())
-        except Exception:
-            about_text.setPlainText("About information goes here.")
-        self.tabs.addTab(about_text, "За приложението")
 
         self.settings_tab = SettingsTab(app_settings, on_settings_changed)
         self.tabs.addTab(self.settings_tab, "Настройки")
+
+        self.help_browser = QTextBrowser()
+        self.help_browser.setOpenExternalLinks(True)
+        help_html = load_markdown_html(doc_path("help_bg.md"), theme)
+        self.help_browser.setHtml(help_html)
+        self.tabs.addTab(self.help_browser, "Помощ")
+
+        self.about_browser = QTextBrowser()
+        self.about_browser.setOpenExternalLinks(True)
+        about_html = load_markdown_html(doc_path("about_bg.md"), theme)
+        self.about_browser.setHtml(about_html)
+        self.tabs.addTab(self.about_browser, "За приложението")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 18, 18, 18)
@@ -214,26 +208,34 @@ class InfoDialog(QDialog):
         painter.fillPath(path, QBrush(QColor("#fafafa")))
 
     def resizeEvent(self, event):
-        # Keep "X" in the top-right, inside margins
-        self.close_label.move(self.width() - self.close_label.width() - 8, 8)
         super().resizeEvent(event)
 
     def showEvent(self, event):
         if self.parent():
-            parent_rect = self.parent().frameGeometry()
-            this_rect = self.frameGeometry()
-            x = parent_rect.center().x() - this_rect.width() // 2
-            y = parent_rect.center().y() - this_rect.height() // 2
-            self.move(x, y)
+            parent_geom = self.parent().frameGeometry()
+            screen_geom = QApplication.desktop().screenGeometry(parent_geom.center())
+            popup_height = self.height()
+            below_top = parent_geom.bottom()
+            below_room = screen_geom.bottom() - below_top
+            if below_room >= popup_height:
+                x = parent_geom.center().x() - self.width() // 2
+                y = below_top
+            else:
+                above_bottom = parent_geom.top()
+                if (above_bottom - screen_geom.top()) >= popup_height:
+                    x = parent_geom.center().x() - self.width() // 2
+                    y = above_bottom - popup_height
+                else:
+                    x = screen_geom.center().x() - self.width() // 2
+                    y = screen_geom.center().y() - self.height() // 2
+            x = max(screen_geom.left(), min(x, screen_geom.right() - self.width()))
+            y = max(screen_geom.top(), min(y, screen_geom.bottom() - self.height()))
+            self.move(int(x), int(y))
         else:
             qr = self.frameGeometry()
             cp = QApplication.desktop().screen().rect().center()
             self.move(cp.x() - qr.width() // 2, cp.y() - qr.height() // 2)
-        self.close_label.raise_()
         super().showEvent(event)
-
-    def close_label_mouse_press(self, event):
-        self.close()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -251,7 +253,6 @@ class ConverterWindow(QWidget):
         self.settings = settings
         self.on_settings_changed = on_settings_changed
 
-        # --- State ---
         self.input_value = ""
         self.bgn_to_eur = settings.get("last_direction_bgn_to_eur", True)
         self.dragging = False
@@ -259,8 +260,8 @@ class ConverterWindow(QWidget):
         self.minimal_mode = settings.get("minimal_mode", False)
         self.last_clipboard = ""
         self.always_on_top = settings.get("always_on_top", True)
+        self.info_popup = None
 
-        # --- UI elements (shared) ---
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
         self.input_label.setStyleSheet("font-size:24px; color:#888; font-family:'Arial'; font-weight:bold;")
@@ -278,23 +279,19 @@ class ConverterWindow(QWidget):
         self.output_label.setAlignment(Qt.AlignCenter)
         self.output_label.setStyleSheet("font-size:24px; color:#888; font-family:'Arial'; font-weight:bold;")
 
-        # --- Version label ---
         self.version_label = QLabel(f"версия {VERSION}")
         self.version_label.setAlignment(Qt.AlignCenter)
         self.version_label.setStyleSheet("color: #888; font-size: 13px; font-family:'Arial'; background: #fffafa;")
         self.version_label.setFixedHeight(22)
 
-        # --- Main layout ---
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(10, 5, 10, 5)
         self.main_layout.setSpacing(8)
 
-        # Set initial mode/layout
         self.set_mode(self.minimal_mode)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
 
-        # --- Restore window position if available ---
         x, y = settings.get("x"), settings.get("y")
         if x is not None and y is not None:
             self.move(x, y)
@@ -377,23 +374,47 @@ class ConverterWindow(QWidget):
             painter.setPen(Qt.NoPen)
 
     def mousePressEvent(self, event):
+        if self.info_popup is not None and self.info_popup.isVisible():
+            self.info_popup.close()
+            # Re-dispatch this event after popup closes
+            QTimer.singleShot(0, lambda: QApplication.postEvent(self, QMouseEvent(
+                event.type(), event.localPos(), event.screenPos(),
+                event.button(), event.buttons(), event.modifiers())))
+            return
         if event.button() == Qt.RightButton:
-            dlg = InfoDialog(parent=self, app_settings=self.settings, on_settings_changed=self.on_settings_changed)
-            dlg.exec_()
+            self.show_info_popup()
             return
         if event.button() == Qt.LeftButton and not self.switch_button.underMouse():
             self.dragging = True
             self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
             event.accept()
+
+    def show_info_popup(self):
+        if self.info_popup is None or not self.info_popup.isVisible():
+            self.info_popup = InfoDialog(parent=self, app_settings=self.settings, on_settings_changed=self.on_settings_changed)
+            self.info_popup.show()
+            self.info_popup.activateWindow()
+            self.info_popup.setFocus()
+
     def mouseMoveEvent(self, event):
+        if self.info_popup is not None and self.info_popup.isVisible():
+            self.info_popup.close()
+            QTimer.singleShot(0, lambda: QApplication.postEvent(self, QMouseEvent(
+                event.type(), event.localPos(), event.screenPos(),
+                event.button(), event.buttons(), event.modifiers())))
+            return
         if self.dragging:
             self.move(event.globalPos() - self.drag_position)
             event.accept()
+
     def mouseReleaseEvent(self, event):
         self.dragging = False
 
     def keyPressEvent(self, event):
         key = event.key()
+        if self.info_popup is not None and self.info_popup.isVisible():
+            QApplication.sendEvent(self.info_popup, event)
+            return
         if Qt.Key_0 <= key <= Qt.Key_9:
             if len(self.input_value) < 10:
                 self.input_value += event.text()
@@ -440,7 +461,6 @@ class ConverterWindow(QWidget):
             output = f"{bgn:.2f}"
             self.output_label.setText(f"{output} лв.")
 
-        # Auto-copy output value (if enabled in settings)
         if self.settings.get("auto_copy_result", True):
             clipboard = QApplication.clipboard()
             if output != getattr(self, "last_clipboard", ""):
@@ -462,7 +482,6 @@ class ConverterWindow(QWidget):
 
     def closeEvent(self, event):
         event.ignore()
-        # Save window position and minimal_mode
         pos = self.pos()
         self.settings["x"] = pos.x()
         self.settings["y"] = pos.y()
@@ -478,19 +497,9 @@ class ConverterWindow(QWidget):
             )
 
 def main():
-    if not acquire_lock():
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle("BGN/EUR Конвертор")
-        msg.setText("Конверторът вече работи.")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
-        sys.exit(0)
-
     settings = load_settings()
     app = QApplication(sys.argv)
 
-    # --------- ICON LOGIC ---------
     import ctypes
     app_id = "stoimarket.currency.converter"
     try:
@@ -521,7 +530,6 @@ def main():
 
     def on_settings_changed(updated_settings):
         save_settings(updated_settings)
-        # Here you can re-apply always-on-top, theme, etc., live if needed
 
     window = ConverterWindow(tray, settings, on_settings_changed)
     window.setWindowIcon(icon)
@@ -535,11 +543,17 @@ def main():
             window.raise_()
             window.setFocus()
 
+    def update_tray_label():
+        if window.isVisible():
+            restore_action.setText("Затвори")
+        else:
+            restore_action.setText("Покажи")
+
+    menu.aboutToShow.connect(update_tray_label)
     restore_action.triggered.connect(toggle_show_hide)
 
     def open_info_dialog():
-        dlg = InfoDialog(parent=window, app_settings=settings, on_settings_changed=on_settings_changed)
-        dlg.exec_()
+        window.show_info_popup()
     info_action.triggered.connect(open_info_dialog)
 
     tray.activated.connect(
@@ -549,17 +563,14 @@ def main():
     tray.show()
 
     def cleanup():
-        # Save settings on quit
         pos = window.pos()
         settings["x"] = pos.x()
         settings["y"] = pos.y()
         settings["minimal_mode"] = window.minimal_mode
         save_settings(settings)
-        release_lock()
         app.quit()
     app.aboutToQuit.connect(cleanup)
 
-    # Startup behavior
     if settings.get("start_minimized", True):
         window.hide()
     else:
