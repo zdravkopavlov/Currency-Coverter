@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush, QCursor
 from PyQt5.QtCore import Qt, QPoint, QRectF, QTimer
 
-VERSION = "2.2.0"
+VERSION = "2.1.0"
 EXCHANGE_RATE = 1.95583
 UPDATE_URL = "https://raw.githubusercontent.com/zdravkopavlov/Currency-Coverter/main/latest_version.json"
 
@@ -552,6 +552,7 @@ class ConverterWindow(QWidget):
     def mousePressEvent(self, event):
         if self.info_popup is not None and self.info_popup.isVisible():
             self.info_popup.close()
+            self.info_popup = None
             QTimer.singleShot(0, lambda: QApplication.postEvent(self, event))
             return
         if event.button() == Qt.RightButton:
