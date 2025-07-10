@@ -1,7 +1,6 @@
 import sys
 import os
 import json
-import tempfile
 import markdown  # pip install markdown
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -11,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush, QMouseEvent
 from PyQt5.QtCore import Qt, QPoint, QRectF, QTimer
 
-VERSION = "2.0.2"
+VERSION = "2.1.0"
 EXCHANGE_RATE = 1.95583
 
 def get_user_settings_path():
@@ -80,7 +79,7 @@ def load_markdown_html(filepath, theme="light"):
     if theme == "dark":
         css = """
         <style>
-        body { background: #23272e; color: #e0e0e0; font-family: Arial, sans-serif; }
+        body { background: #333333; color: #e0e0e0; font-family: Arial, sans-serif; }
         h1, h2, h3, h4, h5 { color: #fafafa; }
         code, pre { background: #181a20; color: #fff; border-radius: 4px; padding: 1px 4px; }
         a { color: #8ab4f8; }
@@ -101,10 +100,11 @@ def load_markdown_html(filepath, theme="light"):
     return html
 
 class SettingsTab(QWidget):
-    def __init__(self, app_settings, on_settings_changed):
+    def __init__(self, app_settings, on_settings_changed, parent_window=None):
         super().__init__()
         self.app_settings = app_settings
         self.on_settings_changed = on_settings_changed
+        self.parent_window = parent_window
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -161,6 +161,9 @@ class SettingsTab(QWidget):
         self.app_settings["remember_last_direction"] = self.chk_remember_last_direction.isChecked()
         if self.on_settings_changed:
             self.on_settings_changed(self.app_settings)
+        # Live theme update for entire UI
+        if self.parent_window:
+            self.parent_window.apply_theme(get_theme(self.app_settings))
 
 class InfoDialog(QDialog):
     def __init__(self, parent=None, app_settings=None, on_settings_changed=None):
@@ -169,27 +172,25 @@ class InfoDialog(QDialog):
         self.setModal(False)
         self.setFixedSize(520, 540)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-
-        theme = get_theme(app_settings)
-
+        self.theme = get_theme(app_settings)
         self.tabs = QTabWidget(self)
         self.tabs.setStyleSheet("""
             QTabBar::tab { height: 28px; width: 140px; font-size: 13px; }
             QTabWidget::pane { border: none; background: transparent; }
         """)
 
-        self.settings_tab = SettingsTab(app_settings, on_settings_changed)
+        self.settings_tab = SettingsTab(app_settings, on_settings_changed, parent_window=self)
         self.tabs.addTab(self.settings_tab, "Настройки")
 
         self.help_browser = QTextBrowser()
         self.help_browser.setOpenExternalLinks(True)
-        help_html = load_markdown_html(doc_path("help_bg.md"), theme)
+        help_html = load_markdown_html(doc_path("help_bg.md"), self.theme)
         self.help_browser.setHtml(help_html)
         self.tabs.addTab(self.help_browser, "Помощ")
 
         self.about_browser = QTextBrowser()
         self.about_browser.setOpenExternalLinks(True)
-        about_html = load_markdown_html(doc_path("about_bg.md"), theme)
+        about_html = load_markdown_html(doc_path("about_bg.md"), self.theme)
         self.about_browser.setHtml(about_html)
         self.tabs.addTab(self.about_browser, "За приложението")
 
@@ -198,6 +199,58 @@ class InfoDialog(QDialog):
         layout.setSpacing(0)
         layout.addWidget(self.tabs)
         self.setLayout(layout)
+        self.apply_theme(self.theme)
+
+    def apply_theme(self, theme):
+        # For the popup background and controls
+        if theme == "dark":
+            bg = "#333333"
+            fg = "#e0e0e0"
+            border = "#393939"
+        else:
+            bg = "#fafafa"
+            fg = "#2b2b2b"
+            border = "#cccccc"
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {bg};
+                color: {fg};
+                border-radius: 24px;
+            }}
+            QLabel, QCheckBox, QComboBox {{
+                color: {fg};
+                background: transparent;
+            }}
+            QTabWidget::pane {{
+                background: transparent;
+            }}
+            QTabBar::tab {{
+                background: {bg};
+                color: {fg};
+                border-radius: 8px 8px 0 0;
+                min-width: 120px;
+                padding: 8px 2px;
+            }}
+            QTabBar::tab:selected {{
+                background: {border};
+                color: {fg};
+            }}
+            QPushButton {{
+                background: #313640;
+                color: #eee;
+                border-radius: 8px;
+            }}
+            QPushButton:hover {{
+                background: #374151;
+            }}
+        """)
+        # Update text browsers for new theme:
+        help_html = load_markdown_html(doc_path("help_bg.md"), theme)
+        self.help_browser.setHtml(help_html)
+        about_html = load_markdown_html(doc_path("about_bg.md"), theme)
+        self.about_browser.setHtml(about_html)
+        self.theme = theme
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -205,7 +258,8 @@ class InfoDialog(QDialog):
         rect = QRectF(self.rect())
         path = QPainterPath()
         path.addRoundedRect(rect, 24, 24)
-        painter.fillPath(path, QBrush(QColor("#fafafa")))
+        # Use theme color
+        painter.fillPath(path, QBrush(QColor("#222222" if self.theme == "dark" else "#fafafa")))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -264,24 +318,28 @@ class ConverterWindow(QWidget):
 
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
-        self.input_label.setStyleSheet("font-size:24px; color:#888; font-family:'Arial'; font-weight:bold;")
 
         self.switch_button = QPushButton("⇄")
         self.switch_button.setFixedSize(48, 48)
-        self.switch_button.setStyleSheet(
-            "QPushButton {font-size:32px; color:#888; border:none; background:#eeeeee; border-radius:24px;}"
-            "QPushButton:hover {background:#cccccc;}"
-        )
-        self.switch_button.setCursor(Qt.PointingHandCursor)
+        self.switch_button.setStyleSheet("""
+            QPushButton {
+                font-size:32px;
+                color:#888;
+                border:none;
+                background:#aaaaaa;
+                border-radius:24px;
+            }
+            QPushButton:hover {
+                background:#cccccc;
+            }
+        """)
         self.switch_button.clicked.connect(self.toggle_direction)
 
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
-        self.output_label.setStyleSheet("font-size:24px; color:#888; font-family:'Arial'; font-weight:bold;")
 
         self.version_label = QLabel(f"версия {VERSION}")
         self.version_label.setAlignment(Qt.AlignCenter)
-        self.version_label.setStyleSheet("color: #888; font-size: 13px; font-family:'Arial'; background: #fffafa;")
         self.version_label.setFixedHeight(22)
 
         self.main_layout = QVBoxLayout(self)
@@ -295,6 +353,8 @@ class ConverterWindow(QWidget):
         x, y = settings.get("x"), settings.get("y")
         if x is not None and y is not None:
             self.move(x, y)
+        # Apply theme at startup
+        self.apply_theme(get_theme(self.settings))
 
     def set_mode(self, minimal):
         self.minimal_mode = minimal
@@ -314,15 +374,21 @@ class ConverterWindow(QWidget):
             h_layout = QHBoxLayout()
             h_layout.setSpacing(8)
             h_layout.setContentsMargins(0, 0, 0, 0)
-            self.input_label.setStyleSheet("font-size:22px; color:#888; font-weight:bold; font-family:'Arial';")
             self.input_label.setFixedHeight(26)
-            self.output_label.setStyleSheet("font-size:22px; color:#888; font-weight:bold; font-family:'Arial';")
             self.output_label.setFixedHeight(26)
-            self.switch_button.setFixedSize(16, 16)
-            self.switch_button.setStyleSheet(
-                "QPushButton {font-size:15px; color:#888; border:none; background:#eeeeee; border-radius:8px;}"
-                "QPushButton:hover {background:#cccccc;}"
-            )
+            self.switch_button.setFixedSize(24, 24)
+            self.switch_button.setStyleSheet("""
+                QPushButton {
+                    font-size:15px;
+                    color:#888;
+                    border:none;
+                    background:#eeeeee;
+                    border-radius:12px;
+                }
+                QPushButton:hover {
+                    background:#cccccc;
+                }
+            """)
             h_layout.addWidget(self.input_label)
             h_layout.addWidget(self.switch_button)
             h_layout.addWidget(self.output_label)
@@ -330,14 +396,20 @@ class ConverterWindow(QWidget):
             self.version_label.hide()
         else:
             self.setFixedSize(250, 220)
-            self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold; font-family:'Arial';")
-            self.output_label.setStyleSheet("font-size:36px; color:#888; font-weight:bold; font-family:'Arial';")
-            self.switch_button.setFixedSize(48, 48)
-            self.switch_button.setStyleSheet(
-                "QPushButton {font-size:32px; color:#888; border:none; background:#eeeeee; border-radius:24px;}"
-                "QPushButton:hover {background:#cccccc;}"
-            )
             self.main_layout.addWidget(self.input_label)
+            self.switch_button.setFixedSize(48, 48)
+            self.switch_button.setStyleSheet("""
+                QPushButton {
+                    font-size:32px;
+                    color:#888;
+                    border:none;
+                    background:#eeeeee;
+                    border-radius:24px;
+                }
+                QPushButton:hover {
+                    background:#cccccc;
+                }
+            """)
             btn_layout = QHBoxLayout()
             btn_layout.addStretch()
             btn_layout.addWidget(self.switch_button)
@@ -346,8 +418,45 @@ class ConverterWindow(QWidget):
             self.main_layout.addWidget(self.output_label)
             self.main_layout.addWidget(self.version_label)
             self.version_label.show()
-
         self.update_labels()
+        self.apply_theme(get_theme(self.settings))
+
+    def apply_theme(self, theme):
+        # Update window and controls
+        if theme == "dark":
+            bg = "#222222"
+            fg = "#e0e0e0"
+            border = "#393939"
+            accent = "#4978e9"
+        else:
+            bg = "#fafafa"
+            fg = "#454545"
+            border = "#cccccc"
+            accent = "#1658ff"
+        self.setStyleSheet(f"""
+            QWidget {{
+                background: {bg};
+                color: {fg};
+            }}
+            QLabel {{
+                color: {fg};
+                background: transparent;
+            }}
+            QPushButton {{
+                background: #313640;
+                color: #eee;
+                border-radius: 8px;
+            }}
+            QPushButton:hover {{
+                background: #374151;
+            }}
+        """)
+        self.input_label.setStyleSheet(f"font-size:24px; color:{fg}; font-family:'Arial'; font-weight:bold; background:transparent;")
+        self.output_label.setStyleSheet(f"font-size:24px; color:{fg}; font-family:'Arial'; font-weight:bold; background:transparent;")
+        self.version_label.setStyleSheet(f"color: {fg}; font-size: 13px; font-family:'Arial'; background: {bg};")
+        if self.info_popup and self.info_popup.isVisible():
+            self.info_popup.apply_theme(theme)
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -355,10 +464,10 @@ class ConverterWindow(QWidget):
         rect = QRectF(self.rect())
         path = QPainterPath()
         path.addRoundedRect(rect, 24, 24)
-        painter.fillPath(path, QBrush(QColor("#fafafa")))
-
+        theme = get_theme(self.settings)
+        painter.fillPath(path, QBrush(QColor("#222222" if theme == "dark" else "#fafafa")))
         if not getattr(self, "always_on_top", True):
-            border_color = QColor("#5a5a5a")
+            border_color = QColor("#393939" if theme == "dark" else "#5a5a5a")
             border_width = 3
             shrink = border_width / 2
             border_rect = rect.adjusted(shrink, shrink, -shrink, -shrink)
@@ -376,7 +485,6 @@ class ConverterWindow(QWidget):
     def mousePressEvent(self, event):
         if self.info_popup is not None and self.info_popup.isVisible():
             self.info_popup.close()
-            # Re-dispatch this event after popup closes
             QTimer.singleShot(0, lambda: QApplication.postEvent(self, QMouseEvent(
                 event.type(), event.localPos(), event.screenPos(),
                 event.button(), event.buttons(), event.modifiers())))
@@ -431,7 +539,7 @@ class ConverterWindow(QWidget):
             self.update_labels()
         elif key == Qt.Key_A and not event.modifiers():
             self.toggle_always_on_top()
-        elif key == Qt.Key_M and not event.modifiers():
+        elif key == Qt.Key_C and not event.modifiers():
             self.set_mode(not self.minimal_mode)
         else:
             super().keyPressEvent(event)
@@ -530,6 +638,10 @@ def main():
 
     def on_settings_changed(updated_settings):
         save_settings(updated_settings)
+        # Live theme update everywhere:
+        window.apply_theme(get_theme(updated_settings))
+        if window.info_popup and window.info_popup.isVisible():
+            window.info_popup.apply_theme(get_theme(updated_settings))
 
     window = ConverterWindow(tray, settings, on_settings_changed)
     window.setWindowIcon(icon)
