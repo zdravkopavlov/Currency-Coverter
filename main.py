@@ -4,22 +4,21 @@ import json
 import tempfile
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
-    QSystemTrayIcon, QMenu, QAction, QMessageBox
+    QSystemTrayIcon, QMenu, QAction, QMessageBox, QDialog, QTabWidget, QTextEdit
 )
 from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush
 from PyQt5.QtCore import Qt, QPoint, QRectF
 
+VERSION = "2.0.2"
 EXCHANGE_RATE = 1.95583
-SETTINGS_FILE = "settings.json"
 
-# --- One Instance Lock (Windows only) ---
 try:
     import msvcrt
     IS_WINDOWS = True
 except ImportError:
     IS_WINDOWS = False
 
-LOCKFILE_NAME = 'bgn_eur_converter_qt.lock'
+LOCKFILE_NAME = 'bgn_eur_converter.lock'
 lock_file = None
 
 def acquire_lock():
@@ -47,7 +46,6 @@ def release_lock():
             pass
 
 def get_user_settings_path():
-    # Get the user's AppData\Roaming folder (always writable)
     appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
     settings_folder = os.path.join(appdata, "BGN_EUR_Converter")
     if not os.path.exists(settings_folder):
@@ -76,6 +74,104 @@ def save_settings(pos, minimal_mode):
     except Exception:
         pass
 
+class InfoDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setModal(True)
+        self.setFixedSize(460, 420)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        # --- Close "X" label ---
+        self.close_label = QLabel("✕", self)
+        self.close_label.setStyleSheet("""
+            QLabel {
+                color: #aaa;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 0 2px 0 2px;
+                background: transparent;
+            }
+            QLabel:hover {
+                color: #e43;
+            }
+        """)
+        self.close_label.setFixedSize(24, 24)
+        self.close_label.setAlignment(Qt.AlignCenter)
+        self.close_label.setCursor(Qt.PointingHandCursor)
+        self.close_label.mousePressEvent = self.close_label_mouse_press
+
+        # --- TABBED CONTENT ---
+        self.tabs = QTabWidget(self)
+        self.tabs.setStyleSheet("""
+            QTabBar::tab { height: 28px; width: 130px; font-size: 13px; }
+            QTabWidget::pane { border: none; background: transparent; }
+        """)
+        about_text = QTextEdit()
+        about_text.setReadOnly(True)
+        about_text.setStyleSheet("background: transparent; border: none;")
+        try:
+            with open("about.txt", encoding="utf-8") as f:
+                about_text.setPlainText(f.read())
+        except Exception:
+            about_text.setPlainText("About information goes here.")
+        self.tabs.addTab(about_text, "За приложението")
+
+        settings_text = QTextEdit()
+        settings_text.setReadOnly(True)
+        settings_text.setStyleSheet("background: transparent; border: none;")
+        try:
+            with open("settings.txt", encoding="utf-8") as f:
+                settings_text.setPlainText(f.read())
+        except Exception:
+            settings_text.setPlainText("Settings will be here.")
+        self.tabs.addTab(settings_text, "Настройки")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(0)
+        layout.addWidget(self.tabs)
+        self.setLayout(layout)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect())
+        path = QPainterPath()
+        path.addRoundedRect(rect, 24, 24)
+        painter.fillPath(path, QBrush(QColor("#fafafa")))
+
+    def resizeEvent(self, event):
+        # Keep "X" in the top-right, inside margins
+        self.close_label.move(self.width() - self.close_label.width() - 8, 8)
+        super().resizeEvent(event)
+
+    def showEvent(self, event):
+        # Center in parent (main window) or screen
+        if self.parent():
+            parent_rect = self.parent().frameGeometry()
+            this_rect = self.frameGeometry()
+            x = parent_rect.center().x() - this_rect.width() // 2
+            y = parent_rect.center().y() - this_rect.height() // 2
+            self.move(x, y)
+        else:
+            qr = self.frameGeometry()
+            cp = QApplication.desktop().screen().rect().center()
+            self.move(cp.x() - qr.width() // 2, cp.y() - qr.height() // 2)
+        self.close_label.raise_()
+        super().showEvent(event)
+
+    def close_label_mouse_press(self, event):
+        self.close()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+
+
+
 class ConverterWindow(QWidget):
     def __init__(self, tray, settings):
         super().__init__()
@@ -91,6 +187,7 @@ class ConverterWindow(QWidget):
         self.drag_position = QPoint()
         self.minimal_mode = settings.get("minimal_mode", False)
         self.last_clipboard = ""
+        self.always_on_top = True  # Track always-on-top state
 
         # --- UI elements (shared) ---
         self.input_label = QLabel("0.00 лв.")
@@ -110,10 +207,16 @@ class ConverterWindow(QWidget):
         self.output_label.setAlignment(Qt.AlignCenter)
         self.output_label.setStyleSheet("font-size:24px; color:#888; font-family:'Arial'; font-weight:bold;")
 
-        # --- Single main layout ---
+        # --- Version label ---
+        self.version_label = QLabel(f"версия {VERSION}")
+        self.version_label.setAlignment(Qt.AlignCenter)
+        self.version_label.setStyleSheet("color: #888; font-size: 13px; font-family:'Arial'; background: #fffafa;")
+        self.version_label.setFixedHeight(22)
+
+        # --- Main layout ---
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(10, 10, 10, 10)
-        self.main_layout.setSpacing(12)
+        self.main_layout.setContentsMargins(10, 5, 10, 5)
+        self.main_layout.setSpacing(8)
 
         # Set initial mode/layout
         self.set_mode(self.minimal_mode)
@@ -127,7 +230,6 @@ class ConverterWindow(QWidget):
 
     def set_mode(self, minimal):
         self.minimal_mode = minimal
-        # Remove everything from the main_layout
         while self.main_layout.count():
             item = self.main_layout.takeAt(0)
             w = item.widget()
@@ -136,14 +238,16 @@ class ConverterWindow(QWidget):
             else:
                 del item
 
+        self.main_layout.setContentsMargins(10, 5, 10, 5)
+        self.main_layout.setSpacing(8)
+
         if minimal:
-            self.setFixedSize(300, 50)  # Even shorter!
+            self.setFixedSize(300, 50)
             h_layout = QHBoxLayout()
             h_layout.setSpacing(8)
             h_layout.setContentsMargins(0, 0, 0, 0)
-            # --- Shrink fonts and button for compact mode ---
             self.input_label.setStyleSheet("font-size:22px; color:#888; font-weight:bold; font-family:'Arial';")
-            self.input_label.setFixedHeight(26) 
+            self.input_label.setFixedHeight(26)
             self.output_label.setStyleSheet("font-size:22px; color:#888; font-weight:bold; font-family:'Arial';")
             self.output_label.setFixedHeight(26)
             self.switch_button.setFixedSize(16, 16)
@@ -155,9 +259,10 @@ class ConverterWindow(QWidget):
             h_layout.addWidget(self.switch_button)
             h_layout.addWidget(self.output_label)
             self.main_layout.addLayout(h_layout)
+            self.version_label.hide()
         else:
             self.setFixedSize(250, 220)
-            self.input_label.setStyleSheet("font-size:24px; color:#888;  font-weight:bold; font-family:'Arial';")
+            self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold; font-family:'Arial';")
             self.output_label.setStyleSheet("font-size:36px; color:#888; font-weight:bold; font-family:'Arial';")
             self.switch_button.setFixedSize(48, 48)
             self.switch_button.setStyleSheet(
@@ -171,9 +276,11 @@ class ConverterWindow(QWidget):
             btn_layout.addStretch()
             self.main_layout.addLayout(btn_layout)
             self.main_layout.addWidget(self.output_label)
+            self.main_layout.addWidget(self.version_label)
+            self.version_label.show()
+
         self.update_labels()
 
-    # --- Drawing the rounded panel ---
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -182,8 +289,28 @@ class ConverterWindow(QWidget):
         path.addRoundedRect(rect, 24, 24)
         painter.fillPath(path, QBrush(QColor("#fafafa")))
 
-    # --- Draggable window ---
+        # Draw border if always-on-top is OFF
+        if not getattr(self, "always_on_top", True):
+            border_color = QColor("#5a5a5a")
+            border_width = 3
+            shrink = border_width / 2
+            border_rect = rect.adjusted(shrink, shrink, -shrink, -shrink)
+            border_path = QPainterPath()
+            border_path.addRoundedRect(border_rect, 24 - shrink, 24 - shrink)
+            pen = painter.pen()
+            pen.setColor(border_color)
+            pen.setWidth(border_width)
+            pen.setStyle(Qt.DashLine)
+            painter.setPen(pen)
+            painter.drawPath(border_path)
+        else:
+            painter.setPen(Qt.NoPen)
+
     def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            dlg = InfoDialog(parent=self)
+            dlg.exec_()
+            return
         if event.button() == Qt.LeftButton and not self.switch_button.underMouse():
             self.dragging = True
             self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
@@ -195,7 +322,6 @@ class ConverterWindow(QWidget):
     def mouseReleaseEvent(self, event):
         self.dragging = False
 
-    # --- Keyboard logic ---
     def keyPressEvent(self, event):
         key = event.key()
         if Qt.Key_0 <= key <= Qt.Key_9:
@@ -210,18 +336,8 @@ class ConverterWindow(QWidget):
                 self.input_value += '.'
                 self.update_labels()
         elif key == Qt.Key_Escape:
-            if self.input_value and float(self.input_value or 0) != 0:
-                self.input_value = ""
-                self.update_labels()
-            else:
-                self.hide()
-                if self.tray_icon:
-                    self.tray_icon.showMessage(
-                        "Конвертор е скрит",
-                        "Щракнете върху иконата в системния трей, за да възстановите.",
-                        QSystemTrayIcon.Information,
-                        2000
-                    )
+            self.input_value = ""
+            self.update_labels()
         elif key == Qt.Key_A and not event.modifiers():
             self.toggle_always_on_top()
         elif key == Qt.Key_M and not event.modifiers():
@@ -229,7 +345,6 @@ class ConverterWindow(QWidget):
         else:
             super().keyPressEvent(event)
 
-    # --- Conversion logic + auto clipboard ---
     def toggle_direction(self):
         self.bgn_to_eur = not self.bgn_to_eur
         self.input_value = ""
@@ -250,22 +365,22 @@ class ConverterWindow(QWidget):
             bgn = round(val * EXCHANGE_RATE + 1e-8, 2)
             output = f"{bgn:.2f}"
             self.output_label.setText(f"{output} лв.")
-        # Auto-copy output value (not currency symbol)
         clipboard = QApplication.clipboard()
         if output != self.last_clipboard:
             clipboard.setText(output)
             self.last_clipboard = output
 
-    # --- Always-on-top toggle ---
     def toggle_always_on_top(self):
         flags = self.windowFlags()
         if flags & Qt.WindowStaysOnTopHint:
             self.setWindowFlags(flags & ~Qt.WindowStaysOnTopHint)
+            self.always_on_top = False
         else:
             self.setWindowFlags(flags | Qt.WindowStaysOnTopHint)
+            self.always_on_top = True
         self.show()
+        self.update()
 
-    # --- Minimize to tray (Escape) ---
     def closeEvent(self, event):
         event.ignore()
         self.hide()
@@ -289,32 +404,6 @@ def main():
 
     settings = load_settings()
     app = QApplication(sys.argv)
-    icon = QIcon("icon.ico") if os.path.exists("icon.ico") else QIcon()
-
-    tray = QSystemTrayIcon(icon, app)
-    tray.setToolTip("BGN/EUR Конвертор")
-
-    menu = QMenu()
-    restore_action = QAction("Покажи", tray)
-    quit_action = QAction("Изход", tray)
-    menu.addAction(restore_action)
-    menu.addAction(quit_action)
-    tray.setContextMenu(menu)
-
-    window = ConverterWindow(tray, settings)
-
-def main():
-    if not acquire_lock():
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle("BGN/EUR Конвертор")
-        msg.setText("Конверторът вече работи.")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
-        sys.exit(0)
-
-    settings = load_settings()
-    app = QApplication(sys.argv)
 
     # --------- ICON LOGIC ---------
     import ctypes
@@ -324,7 +413,6 @@ def main():
     except Exception:
         pass
 
-    # Use resource_path to be compatible with PyInstaller!
     def resource_path(filename):
         if hasattr(sys, '_MEIPASS'):
             return os.path.join(sys._MEIPASS, filename)
@@ -332,36 +420,45 @@ def main():
 
     icon_path = resource_path("icon.ico")
     icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
-
-    app.setWindowIcon(icon)                 # For taskbar, dialogs, etc.
+    app.setWindowIcon(icon)
 
     tray = QSystemTrayIcon(icon, app)
     tray.setToolTip("BGN/EUR Конвертор")
 
     menu = QMenu()
     restore_action = QAction("Покажи", tray)
+    info_action = QAction("Инфо / Настройки", tray)
     quit_action = QAction("Изход", tray)
     menu.addAction(restore_action)
+    menu.addAction(info_action)
     menu.addAction(quit_action)
     tray.setContextMenu(menu)
 
     window = ConverterWindow(tray, settings)
-    window.setWindowIcon(icon)              # Explicit for alt-tab/taskbar
+    window.setWindowIcon(icon)
 
-    def show_and_raise():
-        window.show()
-        window.activateWindow()
-        window.raise_()
-        window.setFocus()
+    def toggle_show_hide():
+        if window.isVisible():
+            window.hide()
+        else:
+            window.show()
+            window.activateWindow()
+            window.raise_()
+            window.setFocus()
 
-    restore_action.triggered.connect(show_and_raise)
-    quit_action.triggered.connect(app.quit)
+    restore_action.triggered.connect(toggle_show_hide)
+
+    def open_info_dialog():
+        dlg = InfoDialog(parent=window)
+        dlg.exec_()
+    info_action.triggered.connect(open_info_dialog)
+
     tray.activated.connect(
-        lambda reason: show_and_raise() if reason == QSystemTrayIcon.Trigger else None
+        lambda reason: toggle_show_hide() if reason == QSystemTrayIcon.Trigger else None
     )
+    quit_action.triggered.connect(app.quit)
     tray.show()
 
-    # Save window position & layout on exit
     def cleanup():
         pos = window.pos()
         save_settings(pos, window.minimal_mode)
@@ -369,10 +466,8 @@ def main():
         app.quit()
     app.aboutToQuit.connect(cleanup)
 
-    window.show()
-    window.setFocus()
+    window.hide()
     sys.exit(app.exec_())
-
 
 if __name__ == "__main__":
     main()
