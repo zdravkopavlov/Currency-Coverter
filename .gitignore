@@ -3,5 +3,6 @@ __pycache__/
 .vscode/
 build/
 dist/
+installer/
 settings.json
 euro-currency.png
