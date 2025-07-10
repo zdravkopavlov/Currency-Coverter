@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush, QMouseEvent, QCursor
 from PyQt5.QtCore import Qt, QPoint, QRectF, QTimer
 
-VERSION = "2.1.0"
+VERSION = "2.2.1"
 EXCHANGE_RATE = 1.95583
 
 # ---- UPDATE CHECKER CONFIG ----
