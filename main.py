@@ -1,19 +1,22 @@
 import sys
 import os
 import json
-import markdown
-import requests
+import markdown  # pip install markdown
+import requests  # <-- for update checking
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
     QSystemTrayIcon, QMenu, QAction, QDialog, QTabWidget, QTextBrowser,
     QCheckBox, QComboBox, QSpacerItem, QSizePolicy
 )
-from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush, QCursor
+from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush, QMouseEvent, QCursor
 from PyQt5.QtCore import Qt, QPoint, QRectF, QTimer
 
 VERSION = "2.1.0"
 EXCHANGE_RATE = 1.95583
+
+# ---- UPDATE CHECKER CONFIG ----
 UPDATE_URL = "https://raw.githubusercontent.com/zdravkopavlov/Currency-Coverter/main/latest_version.json"
+# --------------------------------
 
 def get_user_settings_path():
     appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
@@ -81,7 +84,7 @@ def load_markdown_html(filepath, theme="light"):
     if theme == "dark":
         css = """
         <style>
-        body { background: #222222; color: #e0e0e0; font-family: Arial, sans-serif; }
+        body { background: #333333; color: #e0e0e0; font-family: Arial, sans-serif; }
         h1, h2, h3, h4, h5 { color: #fafafa; }
         code, pre { background: #181a20; color: #fff; border-radius: 4px; padding: 1px 4px; }
         a { color: #8ab4f8; }
@@ -101,18 +104,20 @@ def load_markdown_html(filepath, theme="light"):
     html = css + html
     return html
 
+# --- UPDATE CHECKER LOGIC ---
 def check_for_update(current_version, url=UPDATE_URL):
     try:
         r = requests.get(url, timeout=4)
         data = r.json()
         latest = data.get("version")
         if latest and latest != current_version:
-            return data
+            return data  # Dict with version, download_url, changelog, date
         return None
     except Exception as e:
         print("Update check failed:", e)
         return None
 
+# --- SETTINGS TAB (with update block at the bottom) ---
 class SettingsTab(QWidget):
     def __init__(self, app_settings, on_settings_changed, parent_window=None, update_info=None, manual_update_callback=None):
         super().__init__()
@@ -149,8 +154,19 @@ class SettingsTab(QWidget):
         self.theme_combo.currentIndexChanged.connect(self.save_settings)
         layout.addWidget(self.theme_combo)
 
-        layout.addSpacing(20)
-        # UPDATES BLOCK
+        self.chk_auto_copy_result = QCheckBox("Автоматично копирай резултата")
+        self.chk_auto_copy_result.setChecked(app_settings.get("auto_copy_result", True))
+        self.chk_auto_copy_result.stateChanged.connect(self.save_settings)
+        layout.addWidget(self.chk_auto_copy_result)
+
+        self.chk_remember_last_direction = QCheckBox("Запомни последната посока на конвертиране")
+        self.chk_remember_last_direction.setChecked(app_settings.get("remember_last_direction", True))
+        self.chk_remember_last_direction.stateChanged.connect(self.save_settings)
+        layout.addWidget(self.chk_remember_last_direction)
+
+        layout.addSpacing(10)
+
+        # UPDATES BLOCK (always at the bottom)
         self.updates_block = QWidget()
         self.updates_layout = QVBoxLayout(self.updates_block)
         self.updates_layout.setContentsMargins(14, 10, 14, 10)
@@ -166,7 +182,6 @@ class SettingsTab(QWidget):
         self.lbl_latest = QLabel("")
         self.lbl_latest.setStyleSheet("font-weight: bold")
         self.lbl_latest.setVisible(False)
-
         self.updates_layout.addWidget(self.lbl_current)
         self.updates_layout.addWidget(self.lbl_latest)
 
@@ -190,24 +205,11 @@ class SettingsTab(QWidget):
         self.manual_check_btn.clicked.connect(self.do_manual_update)
         self.updates_layout.addWidget(self.manual_check_btn)
 
-        # Auto-check checkbox next to updates
+        # Auto-check checkbox (in update block, last)
         self.chk_auto_check_updates = QCheckBox("Автоматична проверка за обновления")
         self.chk_auto_check_updates.setChecked(app_settings.get("auto_check_updates", True))
         self.chk_auto_check_updates.stateChanged.connect(self.save_settings)
         self.updates_layout.addWidget(self.chk_auto_check_updates)
-
-        layout.addSpacing(10)
-
-        # Rest of the settings
-        self.chk_auto_copy_result = QCheckBox("Автоматично копирай резултата")
-        self.chk_auto_copy_result.setChecked(app_settings.get("auto_copy_result", True))
-        self.chk_auto_copy_result.stateChanged.connect(self.save_settings)
-        layout.addWidget(self.chk_auto_copy_result)
-
-        self.chk_remember_last_direction = QCheckBox("Запомни последната посока на конвертиране")
-        self.chk_remember_last_direction.setChecked(app_settings.get("remember_last_direction", True))
-        self.chk_remember_last_direction.stateChanged.connect(self.save_settings)
-        layout.addWidget(self.chk_remember_last_direction)
 
         layout.addItem(QSpacerItem(10, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
         self.setLayout(layout)
@@ -261,7 +263,7 @@ class InfoDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setModal(False)
-        self.setFixedSize(520, 560)
+        self.setFixedSize(520, 540)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.theme = get_theme(app_settings)
         self.update_info = update_info
@@ -299,7 +301,7 @@ class InfoDialog(QDialog):
 
     def apply_theme(self, theme):
         if theme == "dark":
-            bg = "#222222"
+            bg = "#333333"
             fg = "#e0e0e0"
             border = "#393939"
         else:
@@ -339,7 +341,6 @@ class InfoDialog(QDialog):
                 background: #374151;
             }}
         """)
-        # Update text browsers for new theme:
         help_html = load_markdown_html(doc_path("help_bg.md"), theme)
         self.help_browser.setHtml(help_html)
         about_html = load_markdown_html(doc_path("about_bg.md"), theme)
@@ -394,6 +395,7 @@ class InfoDialog(QDialog):
     def update_updates_block(self, info=None):
         self.settings_tab.update_updates_block(info)
 
+# --- MAIN CONVERTER WINDOW ---
 class ConverterWindow(QWidget):
     def __init__(self, tray, settings, on_settings_changed):
         super().__init__()
@@ -419,6 +421,18 @@ class ConverterWindow(QWidget):
 
         self.switch_button = QPushButton("⇄")
         self.switch_button.setFixedSize(48, 48)
+        self.switch_button.setStyleSheet("""
+            QPushButton {
+                font-size:32px;
+                color:#888;
+                border:none;
+                background:#aaaaaa;
+                border-radius:24px;
+            }
+            QPushButton:hover {
+                background:#cccccc;
+            }
+        """)
         self.switch_button.clicked.connect(self.toggle_direction)
 
         self.output_label = QLabel("€0.00")
@@ -471,6 +485,18 @@ class ConverterWindow(QWidget):
             self.input_label.setFixedHeight(26)
             self.output_label.setFixedHeight(26)
             self.switch_button.setFixedSize(24, 24)
+            self.switch_button.setStyleSheet("""
+                QPushButton {
+                    font-size:15px;
+                    color:#888;
+                    border:none;
+                    background:#eeeeee;
+                    border-radius:12px;
+                }
+                QPushButton:hover {
+                    background:#cccccc;
+                }
+            """)
             h_layout.addWidget(self.input_label)
             h_layout.addWidget(self.switch_button)
             h_layout.addWidget(self.output_label)
@@ -478,11 +504,26 @@ class ConverterWindow(QWidget):
             self.version_label.hide()
         else:
             self.setFixedSize(250, 220)
-            self.main_layout.addWidget(self.input_label)
+            self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold; font-family:'Arial';")
+            self.output_label.setStyleSheet("font-size:36px; color:#888; font-weight:bold; font-family:'Arial';")
+            self.switch_button.setFixedSize(48, 48)
+            self.switch_button.setStyleSheet("""
+                QPushButton {
+                    font-size:32px;
+                    color:#888;
+                    border:none;
+                    background:#eeeeee;
+                    border-radius:24px;
+                }
+                QPushButton:hover {
+                    background:#cccccc;
+                }
+            """)
             btn_layout = QHBoxLayout()
             btn_layout.addStretch()
             btn_layout.addWidget(self.switch_button)
             btn_layout.addStretch()
+            self.main_layout.addWidget(self.input_label)
             self.main_layout.addLayout(btn_layout)
             self.main_layout.addWidget(self.output_label)
             self.main_layout.addWidget(self.version_label)
@@ -494,9 +535,13 @@ class ConverterWindow(QWidget):
         if theme == "dark":
             bg = "#222222"
             fg = "#e0e0e0"
+            border = "#393939"
+            accent = "#4978e9"
         else:
             bg = "#fafafa"
-            fg = "#2b2b2b"
+            fg = "#454545"
+            border = "#cccccc"
+            accent = "#1658ff"
         self.setStyleSheet(f"""
             QWidget {{
                 background: {bg};
@@ -553,7 +598,9 @@ class ConverterWindow(QWidget):
         if self.info_popup is not None and self.info_popup.isVisible():
             self.info_popup.close()
             self.info_popup = None
-            QTimer.singleShot(0, lambda: QApplication.postEvent(self, event))
+            QTimer.singleShot(0, lambda: QApplication.postEvent(self, QMouseEvent(
+                event.type(), event.localPos(), event.screenPos(),
+                event.button(), event.buttons(), event.modifiers())))
             return
         if event.button() == Qt.RightButton:
             self.show_info_popup()
@@ -576,7 +623,10 @@ class ConverterWindow(QWidget):
     def mouseMoveEvent(self, event):
         if self.info_popup is not None and self.info_popup.isVisible():
             self.info_popup.close()
-            QTimer.singleShot(0, lambda: QApplication.postEvent(self, event))
+            self.info_popup = None
+            QTimer.singleShot(0, lambda: QApplication.postEvent(self, QMouseEvent(
+                event.type(), event.localPos(), event.screenPos(),
+                event.button(), event.buttons(), event.modifiers())))
             return
         if self.dragging:
             self.move(event.globalPos() - self.drag_position)
