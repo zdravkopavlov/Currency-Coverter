@@ -39,7 +39,7 @@ if win32event is not None:
 
 
 
-VERSION = "2.2.2"
+VERSION = "2.2.3"
 EXCHANGE_RATE = 1.95583
 
 # ---- UPDATE CHECKER CONFIG ----
@@ -233,6 +233,12 @@ class SettingsTab(QWidget):
         self.manual_check_btn.clicked.connect(self.do_manual_update)
         self.updates_layout.addWidget(self.manual_check_btn)
 
+        # Add a label for feedback if no update is found
+        self.no_update_label = QLabel("")
+        self.no_update_label.setVisible(False)
+        self.no_update_label.setStyleSheet("font-size:12px;")
+        self.updates_layout.addWidget(self.no_update_label)
+
         # Auto-check checkbox (in update block, last)
         self.chk_auto_check_updates = QCheckBox("Автоматична проверка за обновления")
         self.chk_auto_check_updates.setChecked(app_settings.get("auto_check_updates", True))
@@ -242,6 +248,7 @@ class SettingsTab(QWidget):
         layout.addItem(QSpacerItem(10, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
         self.setLayout(layout)
         self.update_updates_block()
+        self.apply_theme(get_theme(self.app_settings))
 
     def update_updates_block(self, info=None):
         if info is None:
@@ -267,6 +274,24 @@ class SettingsTab(QWidget):
         # Show manual check button if auto-check is off
         self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
 
+    def apply_theme(self, theme):
+        # Set button style to be readable and interactive
+        if theme == "dark":
+            self.no_update_label.setStyleSheet("font-size:12px; color:#eeeeee;")  # soft yellow
+            btn_style = (
+                "QPushButton { background: #313640; color: #eee; border-radius: 8px; }"
+                "QPushButton:hover { background: #374151; }"
+                "QPushButton:pressed { background: #2d3848; }"
+            )
+        else:
+            self.no_update_label.setStyleSheet("font-size:12px; color:#000000;")
+            btn_style = (
+                "QPushButton { background: #e8e8e8; color: #223; border-radius: 8px; }"
+                "QPushButton:hover { background: #d4d4d4; }"
+                "QPushButton:pressed { background: #c3c3c3; }"
+            )
+        self.manual_check_btn.setStyleSheet(btn_style)
+
     def save_settings(self):
         self.app_settings["start_with_windows"] = self.chk_start_windows.isChecked()
         self.app_settings["start_minimized"] = self.chk_start_minimized.isChecked()
@@ -283,8 +308,15 @@ class SettingsTab(QWidget):
 
     def do_manual_update(self):
         if self.manual_update_callback:
-            self.manual_update_callback()
-        # After checking, the UI will be updated by main window
+            found = self.manual_update_callback()
+            # Return True if update found, False if not
+            if not found:
+                self.no_update_label.setText("Няма налични нови обновления.")
+                self.no_update_label.setVisible(True)
+                QTimer.singleShot(3000, lambda: self.no_update_label.setVisible(False))
+            else:
+                self.no_update_label.setVisible(False)
+
 
 class InfoDialog(QDialog):
     def __init__(self, parent=None, app_settings=None, on_settings_changed=None, update_info=None, manual_update_callback=None):
@@ -326,6 +358,47 @@ class InfoDialog(QDialog):
         layout.addWidget(self.tabs)
         self.setLayout(layout)
         self.apply_theme(self.theme)
+
+    def showEvent(self, event):
+        # Smart positioning, below main window if possible
+        if self.parent() and self.parent().isVisible():
+            parent_geom = self.parent().frameGeometry()
+            screen_geom = QApplication.desktop().screenGeometry(parent_geom.center())
+            popup_height = self.height()
+            below_top = parent_geom.bottom()
+            below_room = screen_geom.bottom() - below_top
+            if below_room >= popup_height:
+                x = parent_geom.center().x() - self.width() // 2
+                y = below_top
+            else:
+                above_bottom = parent_geom.top()
+                if (above_bottom - screen_geom.top()) >= popup_height:
+                    x = parent_geom.center().x() - self.width() // 2
+                    y = above_bottom - popup_height
+                else:
+                    x = screen_geom.center().x() - self.width() // 2
+                    y = screen_geom.center().y() - self.height() // 2
+            x = max(screen_geom.left(), min(x, screen_geom.right() - self.width()))
+            y = max(screen_geom.top(), min(y, screen_geom.bottom() - self.height()))
+            self.move(int(x), int(y))
+        else:
+            # Fallback: center on screen
+            qr = self.frameGeometry()
+            cp = QApplication.desktop().screen().rect().center()
+            self.move(cp.x() - qr.width() // 2, cp.y() - qr.height() // 2)
+        super().showEvent(event)
+        QApplication.instance().installEventFilter(self)
+
+    def closeEvent(self, event):
+        QApplication.instance().removeEventFilter(self)
+        super().closeEvent(event)
+
+    def eventFilter(self, obj, event):
+        if event.type() == event.MouseButtonPress:
+            if not self.geometry().contains(event.globalPos()):
+                self.close()
+                return True
+        return super().eventFilter(obj, event)
 
     def apply_theme(self, theme):
         if theme == "dark":
@@ -386,33 +459,6 @@ class InfoDialog(QDialog):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-
-    def showEvent(self, event):
-        if self.parent():
-            parent_geom = self.parent().frameGeometry()
-            screen_geom = QApplication.desktop().screenGeometry(parent_geom.center())
-            popup_height = self.height()
-            below_top = parent_geom.bottom()
-            below_room = screen_geom.bottom() - below_top
-            if below_room >= popup_height:
-                x = parent_geom.center().x() - self.width() // 2
-                y = below_top
-            else:
-                above_bottom = parent_geom.top()
-                if (above_bottom - screen_geom.top()) >= popup_height:
-                    x = parent_geom.center().x() - self.width() // 2
-                    y = above_bottom - popup_height
-                else:
-                    x = screen_geom.center().x() - self.width() // 2
-                    y = screen_geom.center().y() - self.height() // 2
-            x = max(screen_geom.left(), min(x, screen_geom.right() - self.width()))
-            y = max(screen_geom.top(), min(y, screen_geom.bottom() - self.height()))
-            self.move(int(x), int(y))
-        else:
-            qr = self.frameGeometry()
-            cp = QApplication.desktop().screen().rect().center()
-            self.move(cp.x() - qr.width() // 2, cp.y() - qr.height() // 2)
-        super().showEvent(event)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -802,12 +848,17 @@ def main():
 
     menu = QMenu()
     restore_action = QAction("Покажи", tray)
-    info_action = QAction("Инфо / Настройки", tray)
     quit_action = QAction("Изход", tray)
     menu.addAction(restore_action)
-    menu.addAction(info_action)
     menu.addAction(quit_action)
     tray.setContextMenu(menu)
+
+
+    def tray_activated(reason):
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+            toggle_show_hide()
+
+    tray.activated.connect(tray_activated)
 
     def on_settings_changed(updated_settings):
         save_settings(updated_settings)
@@ -821,12 +872,16 @@ def main():
     window.setWindowTitle(window_title)
 
     def toggle_show_hide():
+        window.dragging = False
+        if window.info_popup and window.info_popup.isVisible():
+            window.info_popup.close()
+            window.info_popup = None
         if window.isVisible():
             window.hide()
         else:
             window.show()
-            window.activateWindow()
             window.raise_()
+            window.activateWindow()
             window.setFocus()
 
     def update_tray_label():
@@ -840,11 +895,7 @@ def main():
 
     def open_info_dialog():
         window.show_info_popup()
-    info_action.triggered.connect(open_info_dialog)
 
-    tray.activated.connect(
-        lambda reason: toggle_show_hide() if reason == QSystemTrayIcon.Trigger else None
-    )
     quit_action.triggered.connect(app.quit)
     tray.show()
 
