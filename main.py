@@ -11,7 +11,35 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor, QBrush, QMouseEvent, QCursor
 from PyQt5.QtCore import Qt, QPoint, QRectF, QTimer
 
-VERSION = "2.2.1"
+window_title = "BGN/EUR Converter SingleInstance MainWindow"
+
+try:
+    import win32event
+    import win32api
+    import winerror
+    import win32gui
+    import win32con
+except ImportError:
+    win32event = None
+
+
+
+mutexname = "BGN_EUR_CONVERTER_MUTEX"
+if win32event is not None:
+    mutex = win32event.CreateMutex(None, False, mutexname)
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        # App already running: find and show the main window
+        import time
+        time.sleep(0.2)  # Give main window time to start, just in case
+        hwnd = win32gui.FindWindow(None, window_title)
+        if hwnd:
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            win32gui.SetForegroundWindow(hwnd)
+        sys.exit(0)
+
+
+
+VERSION = "2.2.2"
 EXCHANGE_RATE = 1.95583
 
 # ---- UPDATE CHECKER CONFIG ----
@@ -789,6 +817,8 @@ def main():
 
     window = ConverterWindow(tray, settings, on_settings_changed)
     window.setWindowIcon(icon)
+
+    window.setWindowTitle(window_title)
 
     def toggle_show_hide():
         if window.isVisible():

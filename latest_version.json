@@ -1,6 +1,6 @@
 {
-  "version": "2.2.1",
-  "download_url": "https://github.com/zdravkopavlov/Currency-Coverter/releases/download/v2.2.1/BGN-EUR_Converter_Setup_2.2.1.exe",
+  "version": "2.2.2",
+  "download_url": "https://github.com/zdravkopavlov/Currency-Coverter/releases/download/v2.2.2/BGN-EUR_Converter_Setup_2.2.2.exe",
   "changelog": "• New right-click popup for settings/help\n• Dark/light theme\n• Improved UI and tray menu\n• Live settings update",
   "date": "2025-07-10"
 }
