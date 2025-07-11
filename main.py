@@ -36,7 +36,7 @@ if win32event is not None:
             win32gui.SetForegroundWindow(hwnd)
         sys.exit(0)
 
-VERSION = "2.2.5"
+VERSION = "2.2.6"
 EXCHANGE_RATE = 1.95583
 
 UPDATE_URL = "https://raw.githubusercontent.com/zdravkopavlov/Currency-Coverter/main/latest_version.json"
