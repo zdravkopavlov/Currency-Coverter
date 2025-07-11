@@ -1,3 +1,9 @@
+## 2.2.4 (2025-07-11)
+- Streamlined the update process with a new downloader script
+- Fixed issues with orphaned settings dialog
+- Improved single instance logic to prevent multiple app launches
+- Enhanced UI responsiveness and stability
+
 ## 2.2.3 (2025-07-10)
 - Fixed crash when closing orphaned settings dialog
 

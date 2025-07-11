@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject
 
-INSTALLER_URL = "https://github.com/zdravkopavlov/Currency-Coverter/releases/download/v2.2.3/BGN-EUR_Converter_Setup_2.2.3.exe"
+LATEST_JSON_URL = "https://raw.githubusercontent.com/zdravkopavlov/Currency-Coverter/main/latest_version.json"
 
 class DownloadSignals(QObject):
     progress = pyqtSignal(int)
@@ -20,7 +20,6 @@ def run_installer_as_admin(installer_path):
         try:
             import ctypes
             params = ''
-            # Show=1 (SW_SHOWNORMAL)
             result = ctypes.windll.shell32.ShellExecuteW(
                 None, "runas", installer_path, params, None, 1
             )
@@ -35,10 +34,11 @@ class Downloader(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Изтегли и инсталирай обновлението")
-        self.setFixedSize(400, 160)
+        self.setFixedSize(400, 220)
         self.layout = QVBoxLayout(self)
         
-        self.label = QLabel("Изтегли новата версия и инсталирай")
+        self.label = QLabel("Изтегляне на информация за обновление...")
+        self.label.setWordWrap(True)
         self.layout.addWidget(self.label)
         
         self.progress = QProgressBar(self)
@@ -47,6 +47,7 @@ class Downloader(QWidget):
         self.layout.addWidget(self.progress)
         
         self.button = QPushButton("Изтегли и инсталирай")
+        self.button.setEnabled(False)
         self.button.clicked.connect(self.start_download)
         self.layout.addWidget(self.button)
 
@@ -56,16 +57,41 @@ class Downloader(QWidget):
         self.signals.error.connect(self.download_error)
 
         self.downloading = False
+        self.download_url = None
+
+        # Start by fetching the latest version info
+        threading.Thread(target=self.fetch_latest_info, daemon=True).start()
+
+    def fetch_latest_info(self):
+        try:
+            r = requests.get(LATEST_JSON_URL, timeout=10)
+            r.raise_for_status()
+            info = r.json()
+            url = info.get("download_url")
+            ver = info.get("version", "")
+            changelog = info.get("changelog", "")
+            if url:
+                self.download_url = url
+                # Build the label text
+                label_text = f"Готово за изтегляне на версия {ver}.\n(Ще бъде изтеглен и инсталиран BGN/EUR Конвертор версия {ver})"
+                if changelog:
+                    label_text += f"\n\nНовостите:\n{changelog}"
+                self.label.setText(label_text)
+                self.button.setEnabled(True)
+            else:
+                self.download_error("Липсва адрес за изтегляне на инсталатора!")
+        except Exception as e:
+            self.download_error(f"Грешка при изтегляне на информацията: {e}")
 
     def start_download(self):
-        if self.downloading:
+        if self.downloading or not self.download_url:
             return
         self.downloading = True
         self.button.setEnabled(False)
         threading.Thread(target=self.download_file, daemon=True).start()
 
     def download_file(self):
-        url = INSTALLER_URL
+        url = self.download_url
         local_filename = os.path.basename(url)
         temp_dir = tempfile.gettempdir()
         dest_path = os.path.join(temp_dir, local_filename)
@@ -107,8 +133,9 @@ class Downloader(QWidget):
         self.downloading = False
 
     def download_error(self, message):
-        QMessageBox.critical(self, "Грешка", f"Неуспешно изтегляне:\n{message}")
-        self.button.setEnabled(True)
+        self.label.setText("Грешка!")
+        QMessageBox.critical(self, "Грешка", f"{message}")
+        self.button.setEnabled(False)
         self.downloading = False
 
 if __name__ == "__main__":
