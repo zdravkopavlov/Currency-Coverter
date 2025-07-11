@@ -1,6 +1,6 @@
 {
-  "version": "2.2.4",
-  "download_url": "https://github.com/zdravkopavlov/Currency-Coverter/releases/download/v2.2.4/BGN-EUR_Converter_Setup_2.2.4.exe",
-  "changelog": "- Streamlined the update process with a new downloader script\n- Fixed issues with orphaned settings dialog\n- Improved single instance logic to prevent multiple app launches\n- Enhanced UI responsiveness and stability",
+  "version": "2.2.5",
+  "download_url": "https://github.com/zdravkopavlov/Currency-Coverter/releases/download/v2.2.5/BGN-EUR_Converter_Setup_2.2.5.exe",
+  "changelog": "- Ъпдейт известието вече използва неутрален сив цвят, без подчертаване, видим на всички теми\n- Всички бутони, падащи менюта и статус съобщения следват избраната тема (светла/тъмна) изцяло\n- Поправен е бъг, при който съобщението за нова версия винаги беше синьо и подчертано, независимо от темата\n- Поправен срив при ръчна проверка за обновления, когато автоматичната проверка е изключена\n- Още по-чист и стабилен интерфейс: визуалните съобщения и бутони се обновяват коректно при смяна на темата или след проверка за обновления\n- Малки вътрешни подобрения и рефакторинг на кода",
   "date": "2025-07-11"
 }

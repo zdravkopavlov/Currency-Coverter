@@ -24,27 +24,22 @@ try:
 except ImportError:
     win32event = None
 
-
-
 mutexname = "BGN_EUR_CONVERTER_MUTEX"
 if win32event is not None:
     mutex = win32event.CreateMutex(None, False, mutexname)
     if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-        # App already running: find and show the main window
         import time
-        time.sleep(0.2)  # Give main window time to start, just in case
+        time.sleep(0.2)
         hwnd = win32gui.FindWindow(None, window_title)
         if hwnd:
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             win32gui.SetForegroundWindow(hwnd)
         sys.exit(0)
 
-VERSION = "2.2.4" # Update this version number with each release
+VERSION = "2.2.5"
 EXCHANGE_RATE = 1.95583
 
-# ---- UPDATE CHECKER CONFIG ----
 UPDATE_URL = "https://raw.githubusercontent.com/zdravkopavlov/Currency-Coverter/main/latest_version.json"
-# --------------------------------
 
 def get_user_settings_path():
     appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
@@ -54,7 +49,6 @@ def get_user_settings_path():
     return os.path.join(settings_folder, "settings.json")
 
 def launch_downloader_and_exit(downloader_path="downloader.py"):
-    # If you have downloader.exe, use that instead!
     try:
         if downloader_path.endswith(".py"):
             subprocess.Popen([sys.executable, downloader_path])
@@ -63,8 +57,7 @@ def launch_downloader_and_exit(downloader_path="downloader.py"):
     except Exception as e:
         print(f"Failed to launch updater: {e}")
         return
-    # Quit the main app
-    QApplication.quit()  # or sys.exit(0)
+    QApplication.quit()
 
 def load_settings():
     path = get_user_settings_path()
@@ -145,14 +138,13 @@ def load_markdown_html(filepath, theme="light"):
     html = css + html
     return html
 
-# --- UPDATE CHECKER LOGIC ---
 def check_for_update(current_version, url=UPDATE_URL):
     try:
         r = requests.get(url, timeout=4)
         data = r.json()
         latest = data.get("version")
         if latest and latest != current_version:
-            return data  # Dict with version, download_url, changelog, date
+            return data
         return None
     except Exception as e:
         print("Update check failed:", e)
@@ -182,12 +174,6 @@ class SettingsTab(QWidget):
         self.chk_start_minimized.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_start_minimized)
 
-        # -- removed from the settings dialog
-        #self.chk_always_on_top = QCheckBox("Винаги най-отгоре")
-        #self.chk_always_on_top.setChecked(app_settings.get("always_on_top", True))
-        #self.chk_always_on_top.stateChanged.connect(self.save_settings)
-        #layout.addWidget(self.chk_always_on_top)
-
         lbl_theme = QLabel("Тема:")
         layout.addWidget(lbl_theme)
         self.theme_combo = QComboBox()
@@ -208,7 +194,6 @@ class SettingsTab(QWidget):
 
         layout.addSpacing(10)
 
-        # UPDATES BLOCK (always at the bottom)
         self.updates_block = QWidget()
         self.updates_layout = QVBoxLayout(self.updates_block)
         self.updates_layout.setContentsMargins(14, 10, 14, 10)
@@ -219,7 +204,6 @@ class SettingsTab(QWidget):
         """)
         layout.addWidget(self.updates_block)
 
-        # Current & Latest version labels
         self.lbl_current = QLabel(f"Инсталирана версия: {VERSION}")
         self.lbl_latest = QLabel("")
         self.lbl_latest.setStyleSheet("font-weight: bold")
@@ -227,33 +211,28 @@ class SettingsTab(QWidget):
         self.updates_layout.addWidget(self.lbl_current)
         self.updates_layout.addWidget(self.lbl_latest)
 
-        # Download link
         self.download_button = QPushButton("Изтегли и инсталирай")
         self.download_button.setVisible(False)
         self.download_button.setCursor(Qt.PointingHandCursor)
         self.download_button.clicked.connect(self.launch_downloader)
         self.updates_layout.addWidget(self.download_button)
 
-        # Changelog preview
         self.changelog_label = QLabel()
         self.changelog_label.setVisible(False)
         self.changelog_label.setWordWrap(True)
         self.updates_layout.addWidget(self.changelog_label)
 
-        # Manual check button (visible only if auto-check is off)
         self.manual_check_btn = QPushButton("Провери за обновления")
         self.manual_check_btn.setVisible(False)
         self.manual_check_btn.setCursor(Qt.PointingHandCursor)
         self.manual_check_btn.clicked.connect(self.do_manual_update)
         self.updates_layout.addWidget(self.manual_check_btn)
 
-        # Add a label for feedback if no update is found
         self.no_update_label = QLabel("")
         self.no_update_label.setVisible(False)
         self.no_update_label.setStyleSheet("font-size:12px;")
         self.updates_layout.addWidget(self.no_update_label)
 
-        # Auto-check checkbox (in update block, last)
         self.chk_auto_check_updates = QCheckBox("Автоматична проверка за обновления")
         self.chk_auto_check_updates.setChecked(app_settings.get("auto_check_updates", True))
         self.chk_auto_check_updates.stateChanged.connect(self.save_settings)
@@ -269,7 +248,6 @@ class SettingsTab(QWidget):
             from PyQt5.QtWidgets import QApplication
             import os
             import subprocess
-            # Use .exe if you have it, otherwise .py
             downloader_path = os.path.join(os.path.dirname(sys.argv[0]), "update.py")
             if not os.path.exists(downloader_path):
                 downloader_path = os.path.join(os.path.dirname(sys.argv[0]), "update.exe")
@@ -278,7 +256,7 @@ class SettingsTab(QWidget):
                     subprocess.Popen([sys.executable, downloader_path])
                 else:
                     subprocess.Popen([downloader_path])
-                QApplication.quit()  # Close the main app
+                QApplication.quit()
             else:
                 from PyQt5.QtWidgets import QMessageBox
                 QMessageBox.warning(self, "Грешка", "Файлът за обновление не е намерен.")
@@ -294,8 +272,6 @@ class SettingsTab(QWidget):
             self.lbl_latest.setVisible(True)
             dl_url = info.get("download_url")
             if dl_url:
-                #self.download_label.setText(f"<a href='{dl_url}' style='color:#206ad8; text-decoration:underline'>Изтегли</a>")
-                #self.download_label.setVisible(True)
                 self.download_button.setVisible(True)
             changelog = info.get("changelog")
             if changelog:
@@ -308,13 +284,11 @@ class SettingsTab(QWidget):
             self.lbl_latest.setVisible(False)
             self.download_button.setVisible(False)
             self.changelog_label.setVisible(False)
-        # Show manual check button if auto-check is off
         self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
 
     def apply_theme(self, theme):
-        # Set button style to be readable and interactive
         if theme == "dark":
-            self.no_update_label.setStyleSheet("font-size:12px; color:#eeeeee;")  # soft yellow
+            self.no_update_label.setStyleSheet("font-size:12px; color:#eeeeee;")
             btn_style = (
                 "QPushButton { background: #313640; color: #eee; border-radius: 8px; }"
                 "QPushButton:hover { background: #374151; }"
@@ -332,7 +306,6 @@ class SettingsTab(QWidget):
     def save_settings(self):
         self.app_settings["start_with_windows"] = self.chk_start_windows.isChecked()
         self.app_settings["start_minimized"] = self.chk_start_minimized.isChecked()
-        #self.app_settings["always_on_top"] = self.chk_always_on_top.isChecked()
         self.app_settings["theme"] = self.theme_combo.currentIndex()
         self.app_settings["auto_check_updates"] = self.chk_auto_check_updates.isChecked()
         self.app_settings["auto_copy_result"] = self.chk_auto_copy_result.isChecked()
@@ -352,8 +325,6 @@ class SettingsTab(QWidget):
                 QTimer.singleShot(3000, lambda: self.no_update_label.setVisible(False))
             else:
                 self.no_update_label.setVisible(False)
-
-
 
 class InfoDialog(QDialog):
     def __init__(self, parent=None, app_settings=None, on_settings_changed=None, update_info=None, manual_update_callback=None):
@@ -397,7 +368,6 @@ class InfoDialog(QDialog):
         self.apply_theme(self.theme)
 
     def showEvent(self, event):
-        # Smart positioning, below main window if possible
         if self.parent() and self.parent().isVisible():
             parent_geom = self.parent().frameGeometry()
             screen_geom = QApplication.desktop().screenGeometry(parent_geom.center())
@@ -419,7 +389,6 @@ class InfoDialog(QDialog):
             y = max(screen_geom.top(), min(y, screen_geom.bottom() - self.height()))
             self.move(int(x), int(y))
         else:
-            # Fallback: center on screen
             qr = self.frameGeometry()
             cp = QApplication.desktop().screen().rect().center()
             self.move(cp.x() - qr.width() // 2, cp.y() - qr.height() // 2)
@@ -503,32 +472,6 @@ class InfoDialog(QDialog):
         else:
             super().keyPressEvent(event)
 
-def update_updates_block(self, info=None):
-    if info is None:
-        info = self.update_info
-    if info:
-        self.lbl_latest.setText(f"Налична версия: {info['version']}")
-        self.lbl_latest.setVisible(True)
-        dl_url = info.get("download_url")
-        if dl_url:
-            self.download_button.setVisible(True)
-        else:
-            self.download_button.setVisible(False)
-        changelog = info.get("changelog")
-        if changelog:
-            first_lines = "\n".join(changelog.strip().splitlines()[:3])
-            self.changelog_label.setText(f"<span style='color:#888;'>{first_lines}</span>")
-            self.changelog_label.setVisible(True)
-        else:
-            self.changelog_label.setVisible(False)
-    else:
-        self.lbl_latest.setVisible(False)
-        self.download_button.setVisible(False)
-        self.changelog_label.setVisible(False)
-    self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
-
-
-# --- MAIN CONVERTER WINDOW ---
 class ConverterWindow(QWidget):
     def __init__(self, tray, settings, on_settings_changed):
         super().__init__()
@@ -571,12 +514,7 @@ class ConverterWindow(QWidget):
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
 
-        # Version/update label (bottom)
-        self.version_label = QLabel(f"версия {VERSION}")
-        self.version_label.setAlignment(Qt.AlignCenter)
-        self.version_label.setFixedHeight(22)
-        self.version_label.setCursor(QCursor(Qt.PointingHandCursor))
-        self.version_label.mousePressEvent = self.open_updates_on_click
+        self.version_label = None  # Will be created with reset_version_label
 
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(10, 5, 10, 5)
@@ -591,11 +529,25 @@ class ConverterWindow(QWidget):
             self.move(x, y)
         self.apply_theme(get_theme(self.settings))
 
-        # Update check on launch, if enabled
         if self.settings.get("auto_check_updates", True):
             QTimer.singleShot(1200, self.check_for_updates)
         else:
             self.set_update_label(False)
+
+    def reset_version_label(self, text, color, bg):
+        if self.version_label is not None:
+            self.main_layout.removeWidget(self.version_label)
+            self.version_label.deleteLater()
+        self.version_label = QLabel(text)
+        self.version_label.setAlignment(Qt.AlignCenter)
+        self.version_label.setFixedHeight(22)
+        self.version_label.setCursor(QCursor(Qt.PointingHandCursor))
+        self.version_label.mousePressEvent = self.open_updates_on_click
+        self.version_label.setTextFormat(Qt.PlainText)
+        self.version_label.setStyleSheet(
+            f"color: {color}; font-size: 13px; font-family:'Arial'; background: {bg}; cursor: pointer;"
+        )
+        self.main_layout.addWidget(self.version_label)
 
     def set_mode(self, minimal):
         self.minimal_mode = minimal
@@ -634,7 +586,6 @@ class ConverterWindow(QWidget):
             h_layout.addWidget(self.switch_button)
             h_layout.addWidget(self.output_label)
             self.main_layout.addLayout(h_layout)
-            self.version_label.hide()
         else:
             self.setFixedSize(250, 220)
             self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold; font-family:'Arial';")
@@ -659,8 +610,8 @@ class ConverterWindow(QWidget):
             self.main_layout.addWidget(self.input_label)
             self.main_layout.addLayout(btn_layout)
             self.main_layout.addWidget(self.output_label)
-            self.main_layout.addWidget(self.version_label)
-            self.version_label.show()
+        # Always ensure version label is present and correct
+        self.set_update_label(bool(self.update_info))
         self.update_labels()
         self.apply_theme(get_theme(self.settings))
 
@@ -669,12 +620,10 @@ class ConverterWindow(QWidget):
             bg = "#222222"
             fg = "#e0e0e0"
             border = "#393939"
-            accent = "#4978e9"
         else:
             bg = "#fafafa"
             fg = "#454545"
             border = "#cccccc"
-            accent = "#1658ff"
         self.setStyleSheet(f"""
             QWidget {{
                 background: {bg};
@@ -695,10 +644,7 @@ class ConverterWindow(QWidget):
         """)
         self.input_label.setStyleSheet(f"font-size:24px; color:{fg}; font-family:'Arial'; font-weight:bold; background:transparent;")
         self.output_label.setStyleSheet(f"font-size:24px; color:{fg}; font-family:'Arial'; font-weight:bold; background:transparent;")
-        if self.update_info:
-            self.version_label.setStyleSheet("color: #206ad8; font-size: 13px; text-decoration:underline; font-family:'Arial'; background: transparent; cursor: pointer;")
-        else:
-            self.version_label.setStyleSheet(f"color: {fg}; font-size: 13px; font-family:'Arial'; background: {bg}; cursor: pointer;")
+        self.set_update_label(bool(self.update_info))
         if self.info_popup and self.info_popup.isVisible():
             self.info_popup.apply_theme(theme)
         self.update()
@@ -861,27 +807,24 @@ class ConverterWindow(QWidget):
         info = check_for_update(VERSION)
         self.update_info = info
         self.set_update_label(bool(info))
-        # update info_popup, if open
         if self.info_popup and self.info_popup.isVisible():
             self.info_popup.settings_tab.update_updates_block(self.update_info)
         self.apply_theme(get_theme(self.settings))
 
     def set_update_label(self, has_update):
+        theme = get_theme(self.settings)
+        accent = "#bababa" if theme == "dark" else "#444444"
+        bg = "transparent" if has_update else ("#222222" if theme == "dark" else "#fafafa")
         if has_update:
-            self.version_label.setText("Налична е нова версия!")
-            self.version_label.setStyleSheet("color: #206ad8; font-size: 13px; text-decoration:underline; font-family:'Arial'; background: transparent; cursor: pointer;")
+            self.reset_version_label("Налична е нова версия!", accent, bg)
         else:
-            theme = get_theme(self.settings)
             fg = "#e0e0e0" if theme == "dark" else "#2b2b2b"
-            bg = "#222222" if theme == "dark" else "#fafafa"
-            self.version_label.setText(f"версия {VERSION}")
-            self.version_label.setStyleSheet(f"color: {fg}; font-size: 13px; font-family:'Arial'; background: {bg}; cursor: pointer;")
+            self.reset_version_label(f"версия {VERSION}", fg, bg)
 
     def manual_update_check(self):
         self.check_for_updates()
         if self.info_popup and self.info_popup.isVisible():
             self.info_popup.settings_tab.update_updates_block(self.update_info)
-        # Return True if update info exists (update available), else False
         return bool(self.update_info)
 
 def main():
@@ -914,7 +857,6 @@ def main():
     menu.addAction(quit_action)
     tray.setContextMenu(menu)
 
-
     def tray_activated(reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
             toggle_show_hide()
@@ -929,7 +871,6 @@ def main():
 
     window = ConverterWindow(tray, settings, on_settings_changed)
     window.setWindowIcon(icon)
-
     window.setWindowTitle(window_title)
 
     def toggle_show_hide():
