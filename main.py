@@ -556,9 +556,13 @@ class ConverterWindow(QWidget):
         
 
     def reset_version_label(self, text, color, bg):
-        if self.version_label is not None:
+        # Remove the old label if it exists
+        if hasattr(self, "version_label") and self.version_label is not None:
             self.main_layout.removeWidget(self.version_label)
             self.version_label.deleteLater()
+            self.version_label = None
+
+        # Create new label
         self.version_label = QLabel(text)
         self.version_label.setAlignment(Qt.AlignCenter)
         self.version_label.setFixedHeight(22)
@@ -568,7 +572,11 @@ class ConverterWindow(QWidget):
         self.version_label.setStyleSheet(
             f"color: {color}; font-size: 13px; font-family:'Arial'; background: {bg}; cursor: pointer;"
         )
-        self.main_layout.addWidget(self.version_label)
+
+        # Only add version label to layout in normal (not minimal) mode!
+        if not getattr(self, "minimal_mode", False):
+            self.main_layout.addWidget(self.version_label)
+
 
     def set_mode(self, minimal):
         self.minimal_mode = minimal
@@ -582,6 +590,12 @@ class ConverterWindow(QWidget):
 
         self.main_layout.setContentsMargins(10, 5, 10, 5)
         self.main_layout.setSpacing(8)
+
+        # Safely destroy the version label so it's never in minimal mode
+        if hasattr(self, "version_label") and self.version_label:
+            self.version_label.setParent(None)
+            self.version_label.deleteLater()
+            self.version_label = None
 
         if minimal:
             self.setFixedSize(300, 50)
@@ -607,6 +621,7 @@ class ConverterWindow(QWidget):
             h_layout.addWidget(self.switch_button)
             h_layout.addWidget(self.output_label)
             self.main_layout.addLayout(h_layout)
+            # Do NOT recreate/add the version label!
         else:
             self.setFixedSize(250, 220)
             self.input_label.setStyleSheet("font-size:24px; color:#888; font-weight:bold; font-family:'Arial';")
@@ -631,10 +646,15 @@ class ConverterWindow(QWidget):
             self.main_layout.addWidget(self.input_label)
             self.main_layout.addLayout(btn_layout)
             self.main_layout.addWidget(self.output_label)
-        # Always ensure version label is present and correct
-        self.set_update_label(bool(self.update_info))
+            # Only add/update the version label in normal mode
+        
+        # Only add/update the version label in normal mode!
+        if not minimal:
+            self.set_update_label(bool(self.update_info))
+
         self.update_labels()
         self.apply_theme(get_theme(self.settings))
+
 
     def apply_theme(self, theme):
         if theme == "dark":
@@ -833,6 +853,10 @@ class ConverterWindow(QWidget):
         self.apply_theme(get_theme(self.settings))
 
     def set_update_label(self, has_update):
+
+        def set_update_label(self, has_update):
+            print("SET_UPDATE_LABEL CALLED, minimal mode:", getattr(self, "minimal_mode", None))
+
         theme = get_theme(self.settings)
         accent = "#bababa" if theme == "dark" else "#444444"
         bg = "transparent" if has_update else ("#222222" if theme == "dark" else "#fafafa")
@@ -841,6 +865,7 @@ class ConverterWindow(QWidget):
         else:
             fg = "#e0e0e0" if theme == "dark" else "#2b2b2b"
             self.reset_version_label(f"версия {VERSION}", fg, bg)
+
 
 def manual_update_check(self):
     self.check_for_updates()
