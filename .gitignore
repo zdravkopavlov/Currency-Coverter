@@ -6,4 +6,5 @@ dist/
 installer/
 settings.json
 euro-currency.png
-Installer.iss
+*.iss
+*.spec

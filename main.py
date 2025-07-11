@@ -1,6 +1,8 @@
 import sys
 import os
 import json
+import subprocess
+import tempfile
 import markdown  # pip install markdown
 import requests  # <-- for update checking
 from PyQt5.QtWidgets import (
@@ -39,7 +41,7 @@ if win32event is not None:
 
 
 
-VERSION = "2.2.3"
+VERSION = "2.2.4" # Update this version number with each release
 EXCHANGE_RATE = 1.95583
 
 # ---- UPDATE CHECKER CONFIG ----
@@ -52,6 +54,19 @@ def get_user_settings_path():
     if not os.path.exists(settings_folder):
         os.makedirs(settings_folder)
     return os.path.join(settings_folder, "settings.json")
+
+def launch_downloader_and_exit(downloader_path="downloader.py"):
+    # If you have downloader.exe, use that instead!
+    try:
+        if downloader_path.endswith(".py"):
+            subprocess.Popen([sys.executable, downloader_path])
+        else:
+            subprocess.Popen([downloader_path])
+    except Exception as e:
+        print(f"Failed to launch updater: {e}")
+        return
+    # Quit the main app
+    QApplication.quit()  # or sys.exit(0)
 
 def load_settings():
     path = get_user_settings_path()
@@ -169,10 +184,11 @@ class SettingsTab(QWidget):
         self.chk_start_minimized.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_start_minimized)
 
-        self.chk_always_on_top = QCheckBox("Винаги най-отгоре")
-        self.chk_always_on_top.setChecked(app_settings.get("always_on_top", True))
-        self.chk_always_on_top.stateChanged.connect(self.save_settings)
-        layout.addWidget(self.chk_always_on_top)
+        # -- removed from the settings dialog
+        #self.chk_always_on_top = QCheckBox("Винаги най-отгоре")
+        #self.chk_always_on_top.setChecked(app_settings.get("always_on_top", True))
+        #self.chk_always_on_top.stateChanged.connect(self.save_settings)
+        #layout.addWidget(self.chk_always_on_top)
 
         lbl_theme = QLabel("Тема:")
         layout.addWidget(lbl_theme)
@@ -214,11 +230,11 @@ class SettingsTab(QWidget):
         self.updates_layout.addWidget(self.lbl_latest)
 
         # Download link
-        self.download_label = QLabel()
-        self.download_label.setVisible(False)
-        self.download_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        self.download_label.setOpenExternalLinks(True)
-        self.updates_layout.addWidget(self.download_label)
+        self.download_button = QPushButton("Изтегли и инсталирай")
+        self.download_button.setVisible(False)
+        self.download_button.setCursor(Qt.PointingHandCursor)
+        self.download_button.clicked.connect(self.launch_downloader)
+        self.updates_layout.addWidget(self.download_button)
 
         # Changelog preview
         self.changelog_label = QLabel()
@@ -250,6 +266,28 @@ class SettingsTab(QWidget):
         self.update_updates_block()
         self.apply_theme(get_theme(self.app_settings))
 
+    def launch_downloader(self):
+        try:
+            from PyQt5.QtWidgets import QApplication
+            import os
+            import subprocess
+            # Use .exe if you have it, otherwise .py
+            downloader_path = os.path.join(os.path.dirname(sys.argv[0]), "update.py")
+            if not os.path.exists(downloader_path):
+                downloader_path = os.path.join(os.path.dirname(sys.argv[0]), "update.exe")
+            if os.path.exists(downloader_path):
+                if downloader_path.endswith(".py"):
+                    subprocess.Popen([sys.executable, downloader_path])
+                else:
+                    subprocess.Popen([downloader_path])
+                QApplication.quit()  # Close the main app
+            else:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Грешка", "Файлът за обновление не е намерен.")
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Грешка", f"Неуспешно стартиране на обновлението:\n{e}")
+
     def update_updates_block(self, info=None):
         if info is None:
             info = self.update_info
@@ -258,8 +296,9 @@ class SettingsTab(QWidget):
             self.lbl_latest.setVisible(True)
             dl_url = info.get("download_url")
             if dl_url:
-                self.download_label.setText(f"<a href='{dl_url}' style='color:#206ad8; text-decoration:underline'>Изтегли</a>")
-                self.download_label.setVisible(True)
+                #self.download_label.setText(f"<a href='{dl_url}' style='color:#206ad8; text-decoration:underline'>Изтегли</a>")
+                #self.download_label.setVisible(True)
+                self.download_button.setVisible(True)
             changelog = info.get("changelog")
             if changelog:
                 first_lines = "\n".join(changelog.strip().splitlines()[:3])
@@ -269,7 +308,7 @@ class SettingsTab(QWidget):
                 self.changelog_label.setVisible(False)
         else:
             self.lbl_latest.setVisible(False)
-            self.download_label.setVisible(False)
+            self.download_button.setVisible(False)
             self.changelog_label.setVisible(False)
         # Show manual check button if auto-check is off
         self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
@@ -295,7 +334,7 @@ class SettingsTab(QWidget):
     def save_settings(self):
         self.app_settings["start_with_windows"] = self.chk_start_windows.isChecked()
         self.app_settings["start_minimized"] = self.chk_start_minimized.isChecked()
-        self.app_settings["always_on_top"] = self.chk_always_on_top.isChecked()
+        #self.app_settings["always_on_top"] = self.chk_always_on_top.isChecked()
         self.app_settings["theme"] = self.theme_combo.currentIndex()
         self.app_settings["auto_check_updates"] = self.chk_auto_check_updates.isChecked()
         self.app_settings["auto_copy_result"] = self.chk_auto_copy_result.isChecked()
@@ -466,8 +505,30 @@ class InfoDialog(QDialog):
         else:
             super().keyPressEvent(event)
 
-    def update_updates_block(self, info=None):
-        self.settings_tab.update_updates_block(info)
+def update_updates_block(self, info=None):
+    if info is None:
+        info = self.update_info
+    if info:
+        self.lbl_latest.setText(f"Налична версия: {info['version']}")
+        self.lbl_latest.setVisible(True)
+        dl_url = info.get("download_url")
+        if dl_url:
+            self.download_button.setVisible(True)
+        else:
+            self.download_button.setVisible(False)
+        changelog = info.get("changelog")
+        if changelog:
+            first_lines = "\n".join(changelog.strip().splitlines()[:3])
+            self.changelog_label.setText(f"<span style='color:#888;'>{first_lines}</span>")
+            self.changelog_label.setVisible(True)
+        else:
+            self.changelog_label.setVisible(False)
+    else:
+        self.lbl_latest.setVisible(False)
+        self.download_button.setVisible(False)
+        self.changelog_label.setVisible(False)
+    self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
+
 
 # --- MAIN CONVERTER WINDOW ---
 class ConverterWindow(QWidget):
