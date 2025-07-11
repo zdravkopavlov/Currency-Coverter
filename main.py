@@ -39,8 +39,6 @@ if win32event is not None:
             win32gui.SetForegroundWindow(hwnd)
         sys.exit(0)
 
-
-
 VERSION = "2.2.4" # Update this version number with each release
 EXCHANGE_RATE = 1.95583
 
@@ -348,13 +346,13 @@ class SettingsTab(QWidget):
     def do_manual_update(self):
         if self.manual_update_callback:
             found = self.manual_update_callback()
-            # Return True if update found, False if not
             if not found:
                 self.no_update_label.setText("Няма налични нови обновления.")
                 self.no_update_label.setVisible(True)
                 QTimer.singleShot(3000, lambda: self.no_update_label.setVisible(False))
             else:
                 self.no_update_label.setVisible(False)
+
 
 
 class InfoDialog(QDialog):
@@ -865,7 +863,7 @@ class ConverterWindow(QWidget):
         self.set_update_label(bool(info))
         # update info_popup, if open
         if self.info_popup and self.info_popup.isVisible():
-            self.info_popup.update_updates_block(info)
+            self.info_popup.settings_tab.update_updates_block(self.update_info)
         self.apply_theme(get_theme(self.settings))
 
     def set_update_label(self, has_update):
@@ -882,7 +880,9 @@ class ConverterWindow(QWidget):
     def manual_update_check(self):
         self.check_for_updates()
         if self.info_popup and self.info_popup.isVisible():
-            self.info_popup.update_updates_block(self.update_info)
+            self.info_popup.settings_tab.update_updates_block(self.update_info)
+        # Return True if update info exists (update available), else False
+        return bool(self.update_info)
 
 def main():
     settings = load_settings()
