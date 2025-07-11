@@ -36,7 +36,7 @@ if win32event is not None:
             win32gui.SetForegroundWindow(hwnd)
         sys.exit(0)
 
-VERSION = "2.2.6"
+VERSION = "2.2.7"
 EXCHANGE_RATE = 1.95583
 
 UPDATE_URL = "https://raw.githubusercontent.com/zdravkopavlov/Currency-Coverter/main/latest_version.json"
@@ -164,6 +164,7 @@ class SettingsTab(QWidget):
         layout.setSpacing(12)
         layout.setContentsMargins(16, 16, 16, 16)
 
+        # --- Top checkboxes ---
         self.chk_start_windows = QCheckBox("Стартирай с Windows")
         self.chk_start_windows.setChecked(app_settings.get("start_with_windows", False))
         self.chk_start_windows.stateChanged.connect(self.save_settings)
@@ -173,14 +174,6 @@ class SettingsTab(QWidget):
         self.chk_start_minimized.setChecked(app_settings.get("start_minimized", True))
         self.chk_start_minimized.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_start_minimized)
-
-        lbl_theme = QLabel("Тема:")
-        layout.addWidget(lbl_theme)
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Светла", "Тъмна", "Следвай Windows"])
-        self.theme_combo.setCurrentIndex(app_settings.get("theme", 2))
-        self.theme_combo.currentIndexChanged.connect(self.save_settings)
-        layout.addWidget(self.theme_combo)
 
         self.chk_auto_copy_result = QCheckBox("Автоматично копирай резултата")
         self.chk_auto_copy_result.setChecked(app_settings.get("auto_copy_result", True))
@@ -192,38 +185,41 @@ class SettingsTab(QWidget):
         self.chk_remember_last_direction.stateChanged.connect(self.save_settings)
         layout.addWidget(self.chk_remember_last_direction)
 
+        # --- Theme row: label + compact dropdown, same line ---
+        theme_row = QHBoxLayout()
+        lbl_theme = QLabel("Тема:")
+        theme_row.addWidget(lbl_theme)
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Светла", "Тъмна", "Следвай Windows"])
+        self.theme_combo.setCurrentIndex(app_settings.get("theme", 2))
+        self.theme_combo.currentIndexChanged.connect(self.save_settings)
+        self.theme_combo.setMaximumWidth(120)
+        theme_row.addWidget(self.theme_combo)
+        theme_row.addStretch()
+        layout.addLayout(theme_row)
+
         layout.addSpacing(10)
 
+        # --- Update block, visually grouped ---
         self.updates_block = QWidget()
         self.updates_layout = QVBoxLayout(self.updates_block)
         self.updates_layout.setContentsMargins(14, 10, 14, 10)
-        self.updates_layout.setSpacing(7)
+        self.updates_layout.setSpacing(8)
         self.updates_block.setStyleSheet("""
             background: rgba(64,68,80,0.08);
             border-radius: 12px;
         """)
         layout.addWidget(self.updates_block)
 
+        self.chk_auto_check_updates = QCheckBox("Автоматична проверка за обновления")
+        self.chk_auto_check_updates.setChecked(app_settings.get("auto_check_updates", True))
+        self.chk_auto_check_updates.stateChanged.connect(self.save_settings)
+        self.updates_layout.addWidget(self.chk_auto_check_updates)
+
         self.lbl_current = QLabel(f"Инсталирана версия: {VERSION}")
-        self.lbl_latest = QLabel("")
-        self.lbl_latest.setStyleSheet("font-weight: bold")
-        self.lbl_latest.setVisible(False)
         self.updates_layout.addWidget(self.lbl_current)
-        self.updates_layout.addWidget(self.lbl_latest)
-
-        self.download_button = QPushButton("Изтегли и инсталирай")
-        self.download_button.setVisible(False)
-        self.download_button.setCursor(Qt.PointingHandCursor)
-        self.download_button.clicked.connect(self.launch_downloader)
-        self.updates_layout.addWidget(self.download_button)
-
-        self.changelog_label = QLabel()
-        self.changelog_label.setVisible(False)
-        self.changelog_label.setWordWrap(True)
-        self.updates_layout.addWidget(self.changelog_label)
 
         self.manual_check_btn = QPushButton("Провери за обновления")
-        self.manual_check_btn.setVisible(False)
         self.manual_check_btn.setCursor(Qt.PointingHandCursor)
         self.manual_check_btn.clicked.connect(self.do_manual_update)
         self.updates_layout.addWidget(self.manual_check_btn)
@@ -233,10 +229,21 @@ class SettingsTab(QWidget):
         self.no_update_label.setStyleSheet("font-size:12px;")
         self.updates_layout.addWidget(self.no_update_label)
 
-        self.chk_auto_check_updates = QCheckBox("Автоматична проверка за обновления")
-        self.chk_auto_check_updates.setChecked(app_settings.get("auto_check_updates", True))
-        self.chk_auto_check_updates.stateChanged.connect(self.save_settings)
-        self.updates_layout.addWidget(self.chk_auto_check_updates)
+        self.lbl_latest = QLabel("")
+        self.lbl_latest.setVisible(False)
+        self.lbl_latest.setStyleSheet("font-weight: bold")
+        self.updates_layout.addWidget(self.lbl_latest)
+
+        self.changelog_label = QLabel()
+        self.changelog_label.setVisible(False)
+        self.changelog_label.setWordWrap(True)
+        self.updates_layout.addWidget(self.changelog_label)
+
+        self.download_button = QPushButton("Изтегли и инсталирай")
+        self.download_button.setVisible(False)
+        self.download_button.setCursor(Qt.PointingHandCursor)
+        self.download_button.clicked.connect(self.launch_downloader)
+        self.updates_layout.addWidget(self.download_button)
 
         layout.addItem(QSpacerItem(10, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
         self.setLayout(layout)
@@ -267,41 +274,49 @@ class SettingsTab(QWidget):
     def update_updates_block(self, info=None):
         if info is None:
             info = self.update_info
+        # Manual check button visible ONLY if auto-check is off
+        self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
+        # Hide all dynamic stuff by default
+        self.no_update_label.setVisible(False)
+        self.lbl_latest.setVisible(False)
+        self.changelog_label.setVisible(False)
+        self.download_button.setVisible(False)
+
         if info:
+            # Show "latest version", changelog, and download button if update found
             self.lbl_latest.setText(f"Налична версия: {info['version']}")
             self.lbl_latest.setVisible(True)
-            dl_url = info.get("download_url")
-            if dl_url:
-                self.download_button.setVisible(True)
             changelog = info.get("changelog")
             if changelog:
                 first_lines = "\n".join(changelog.strip().splitlines()[:3])
                 self.changelog_label.setText(f"<span style='color:#888;'>{first_lines}</span>")
                 self.changelog_label.setVisible(True)
-            else:
-                self.changelog_label.setVisible(False)
-        else:
-            self.lbl_latest.setVisible(False)
-            self.download_button.setVisible(False)
-            self.changelog_label.setVisible(False)
-        self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
+            dl_url = info.get("download_url")
+            if dl_url:
+                self.download_button.setVisible(True)
+        elif hasattr(self, 'last_manual_check') and self.last_manual_check:
+            self.no_update_label.setText("Няма налични нови обновления.")
+            self.no_update_label.setVisible(True)
 
     def apply_theme(self, theme):
         if theme == "dark":
             self.no_update_label.setStyleSheet("font-size:12px; color:#eeeeee;")
             btn_style = (
-                "QPushButton { background: #313640; color: #eee; border-radius: 8px; }"
+                "QPushButton { background: #313640; color: #eee; border-radius: 8px; font-size: 15px; padding: 10px 0; }"
                 "QPushButton:hover { background: #374151; }"
                 "QPushButton:pressed { background: #2d3848; }"
             )
+            self.updates_block.setStyleSheet("background: rgba(64,68,80,0.13); border-radius: 12px;")
         else:
             self.no_update_label.setStyleSheet("font-size:12px; color:#000000;")
             btn_style = (
-                "QPushButton { background: #e8e8e8; color: #223; border-radius: 8px; }"
+                "QPushButton { background: #e8e8e8; color: #223; border-radius: 8px; font-size: 15px; padding: 10px 0; }"
                 "QPushButton:hover { background: #d4d4d4; }"
                 "QPushButton:pressed { background: #c3c3c3; }"
             )
+            self.updates_block.setStyleSheet("background: rgba(64,68,80,0.08); border-radius: 12px;")
         self.manual_check_btn.setStyleSheet(btn_style)
+        self.download_button.setStyleSheet(btn_style)
 
     def save_settings(self):
         self.app_settings["start_with_windows"] = self.chk_start_windows.isChecked()
@@ -318,13 +333,14 @@ class SettingsTab(QWidget):
 
     def do_manual_update(self):
         if self.manual_update_callback:
-            found = self.manual_update_callback()
-            if not found:
-                self.no_update_label.setText("Няма налични нови обновления.")
-                self.no_update_label.setVisible(True)
-                QTimer.singleShot(3000, lambda: self.no_update_label.setVisible(False))
-            else:
-                self.no_update_label.setVisible(False)
+            info = self.manual_update_callback()
+            self.update_info = info  # Always update the info property!
+            self.last_manual_check = True
+            self.update_updates_block()
+
+
+    
+
 
 class InfoDialog(QDialog):
     def __init__(self, parent=None, app_settings=None, on_settings_changed=None, update_info=None, manual_update_callback=None):
@@ -533,6 +549,11 @@ class ConverterWindow(QWidget):
             QTimer.singleShot(1200, self.check_for_updates)
         else:
             self.set_update_label(False)
+
+    def manual_update_check(self):
+        info = check_for_update(VERSION)   # Or however you do the version check
+        return info    # Return the info object!
+        
 
     def reset_version_label(self, text, color, bg):
         if self.version_label is not None:
@@ -821,11 +842,11 @@ class ConverterWindow(QWidget):
             fg = "#e0e0e0" if theme == "dark" else "#2b2b2b"
             self.reset_version_label(f"версия {VERSION}", fg, bg)
 
-    def manual_update_check(self):
-        self.check_for_updates()
-        if self.info_popup and self.info_popup.isVisible():
-            self.info_popup.settings_tab.update_updates_block(self.update_info)
-        return bool(self.update_info)
+def manual_update_check(self):
+    self.check_for_updates()
+    if self.info_popup and self.info_popup.isVisible():
+        self.info_popup.settings_tab.update_updates_block(self.update_info)
+    return bool(self.update_info)
 
 def main():
     settings = load_settings()
