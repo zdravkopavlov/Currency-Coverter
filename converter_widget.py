@@ -1,8 +1,11 @@
 # converter_widget.py
 
+VERSION = "2.3.0"
+
 from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
+
 from calculator import bgn_to_eur, eur_to_bgn
 
 class ConverterWidget(QWidget):
@@ -11,6 +14,7 @@ class ConverterWidget(QWidget):
         self.bgn_to_eur_mode = True
         self.input_value = ""
         self.minimal_mode = False
+        self._open_updates_callback = None
 
         # Fonts
         self.font_big = QFont("Arial", 24, QFont.Bold)
@@ -26,7 +30,6 @@ class ConverterWidget(QWidget):
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
         self.input_label.setFont(self.font_big)
-        self.layout.addWidget(self.input_label)
 
         # Switch button
         self.switch_button = QPushButton("⇄")
@@ -34,7 +37,7 @@ class ConverterWidget(QWidget):
         self.switch_button.setStyleSheet("""
             QPushButton {
                 font-size:32px;
-                color:#888;
+                color:#dddddd;
                 border:none;
                 background:#aaaaaa;
                 border-radius:24px;
@@ -44,22 +47,27 @@ class ConverterWidget(QWidget):
             }
         """)
         self.switch_button.clicked.connect(self.toggle_direction)
-        h_layout = QHBoxLayout()
-        h_layout.addStretch()
-        h_layout.addWidget(self.switch_button)
-        h_layout.addStretch()
-        self.layout.addLayout(h_layout)
 
         # Output label
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
         self.output_label.setFont(self.font_big)
-        self.layout.addWidget(self.output_label)
 
-        # Version label (shown only in normal mode)
-        self.version_label = QLabel("версия 2.2.7")
+        # Version label (clickable, settings shortcut)
+        self.version_label = QLabel(f"версия {VERSION}")
         self.version_label.setAlignment(Qt.AlignCenter)
         self.version_label.setFont(self.font_small)
+        self.version_label.setCursor(Qt.PointingHandCursor)
+        self.version_label.mousePressEvent = self._open_updates
+
+        # Main vertical layout (normal mode)
+        self.layout.addWidget(self.input_label)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.switch_button)
+        btn_layout.addStretch()
+        self.layout.addLayout(btn_layout)
+        self.layout.addWidget(self.output_label)
         self.layout.addWidget(self.version_label)
 
         self.setFocusPolicy(Qt.StrongFocus)
@@ -68,21 +76,71 @@ class ConverterWidget(QWidget):
         self.set_mode(self.minimal_mode)
         self.update_labels()
 
+    def set_open_updates_callback(self, callback):
+        self._open_updates_callback = callback
+
+    def _open_updates(self, event):
+        if self._open_updates_callback:
+            self._open_updates_callback()
+
+    def set_update_available(self, available):
+        if available:
+            self.version_label.setText("Налична е нова версия!")
+        else:
+            self.version_label.setText(f"версия {VERSION}")
+
+    def set_version_label_color(self, color):
+        self.version_label.setStyleSheet(f"color:{color};")
+
     def set_mode(self, minimal):
         self.minimal_mode = minimal
+        self._clear_layout()
         if minimal:
             self.setFixedSize(300, 50)
+            h_layout = QHBoxLayout()
+            h_layout.setContentsMargins(10, 5, 10, 5)
+            h_layout.setSpacing(8)
             self.input_label.setFont(self.font_medium)
             self.output_label.setFont(self.font_medium)
-            self.switch_button.setFixedSize(24, 24)
-            self.version_label.setVisible(False)
+            h_layout.addWidget(self.input_label)
+            h_layout.addWidget(self.output_label)
+            self.layout.addLayout(h_layout)
+            self.switch_button.hide()
+            self.version_label.hide()
         else:
             self.setFixedSize(250, 220)
             self.input_label.setFont(self.font_big)
             self.output_label.setFont(self.font_big)
-            self.switch_button.setFixedSize(48, 48)
-            self.version_label.setVisible(True)
+            self.switch_button.show()
+            self.version_label.show()
+            self.layout.addWidget(self.input_label)
+            btn_layout = QHBoxLayout()
+            btn_layout.addStretch()
+            btn_layout.addWidget(self.switch_button)
+            btn_layout.addStretch()
+            self.layout.addLayout(btn_layout)
+            self.layout.addWidget(self.output_label)
+            self.layout.addWidget(self.version_label)
         self.update_labels()
+
+    def _clear_layout(self):
+        # Remove all widgets and layouts from the layout
+        while self.layout.count():
+            item = self.layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+            elif item.layout():
+                self._clear_sub_layout(item.layout())
+
+    def _clear_sub_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+            elif item.layout():
+                self._clear_sub_layout(item.layout())
 
     def toggle_direction(self):
         self.bgn_to_eur_mode = not self.bgn_to_eur_mode
@@ -123,7 +181,10 @@ class ConverterWidget(QWidget):
             self.input_value = ""
             self.update_labels()
         elif key in (Qt.Key_Space, Qt.Key_Tab):
-            # Let the controller (main window) handle page switching
+            self.clearFocus()
+            self.parentWidget().setFocus()
+        elif key == Qt.Key_A and not event.modifiers():
+            # Let the main window handle always on top toggle
             self.clearFocus()
             self.parentWidget().setFocus()
         else:

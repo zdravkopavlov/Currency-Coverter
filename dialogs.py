@@ -1,8 +1,8 @@
-# dialogs.py
+VERSION = "2.3.0"
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QLabel, QComboBox, QPushButton, QSpacerItem, QSizePolicy,
-    QTabWidget, QTextBrowser, QDialog
+    QTabWidget, QTextBrowser, QDialog, QApplication  # <-- Add QApplication here
 )
 from PyQt5.QtCore import Qt, QRectF, QTimer
 from PyQt5.QtGui import QCursor, QPainter, QPainterPath, QBrush, QColor
@@ -11,8 +11,6 @@ from settings import get_theme, save_settings
 import sys
 import os
 import markdown
-
-VERSION = "2.2.7"  # You may want to import this from a central version file
 
 def doc_path(filename):
     base = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -144,8 +142,89 @@ class SettingsTab(QWidget):
         self.update_updates_block()
         self.apply_theme(get_theme(self.app_settings))
 
-    # (Keep all methods from SettingsTab here, unchanged.)
-    # ... launch_downloader, update_updates_block, apply_theme, save_settings, do_manual_update
+    def save_settings(self):
+        self.app_settings["start_with_windows"] = self.chk_start_windows.isChecked()
+        self.app_settings["start_minimized"] = self.chk_start_minimized.isChecked()
+        self.app_settings["theme"] = self.theme_combo.currentIndex()
+        self.app_settings["auto_check_updates"] = self.chk_auto_check_updates.isChecked()
+        self.app_settings["auto_copy_result"] = self.chk_auto_copy_result.isChecked()
+        self.app_settings["remember_last_direction"] = self.chk_remember_last_direction.isChecked()
+        if self.on_settings_changed:
+            self.on_settings_changed(self.app_settings)
+        if self.parent_window:
+            self.parent_window.apply_theme(get_theme(self.app_settings))
+        self.update_updates_block()
+
+    def launch_downloader(self):
+        try:
+            from PyQt5.QtWidgets import QApplication
+            import subprocess
+            downloader_path = os.path.join(os.path.dirname(sys.argv[0]), "update.py")
+            if not os.path.exists(downloader_path):
+                downloader_path = os.path.join(os.path.dirname(sys.argv[0]), "update.exe")
+            if os.path.exists(downloader_path):
+                if downloader_path.endswith(".py"):
+                    subprocess.Popen([sys.executable, downloader_path])
+                else:
+                    subprocess.Popen([downloader_path])
+                QApplication.quit()
+            else:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Грешка", "Файлът за обновление не е намерен.")
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Грешка", f"Неуспешно стартиране на обновлението:\n{e}")
+
+    def update_updates_block(self, info=None):
+        if info is None:
+            info = self.update_info
+        self.manual_check_btn.setVisible(not self.chk_auto_check_updates.isChecked())
+        self.no_update_label.setVisible(False)
+        self.lbl_latest.setVisible(False)
+        self.changelog_label.setVisible(False)
+        self.download_button.setVisible(False)
+
+        if info:
+            self.lbl_latest.setText(f"Налична версия: {info['version']}")
+            self.lbl_latest.setVisible(True)
+            changelog = info.get("changelog")
+            if changelog:
+                first_lines = "\n".join(changelog.strip().splitlines()[:3])
+                self.changelog_label.setText(f"<span style='color:#888;'>{first_lines}</span>")
+                self.changelog_label.setVisible(True)
+            dl_url = info.get("download_url")
+            if dl_url:
+                self.download_button.setVisible(True)
+        elif hasattr(self, 'last_manual_check') and self.last_manual_check:
+            self.no_update_label.setText("Няма налични нови обновления.")
+            self.no_update_label.setVisible(True)
+
+    def apply_theme(self, theme):
+        if theme == "dark":
+            self.no_update_label.setStyleSheet("font-size:12px; color:#eeeeee;")
+            btn_style = (
+                "QPushButton { background: #313640; color: #eee; border-radius: 8px; font-size: 15px; padding: 10px 0; }"
+                "QPushButton:hover { background: #374151; }"
+                "QPushButton:pressed { background: #2d3848; }"
+            )
+            self.updates_block.setStyleSheet("background: rgba(64,68,80,0.13); border-radius: 12px;")
+        else:
+            self.no_update_label.setStyleSheet("font-size:12px; color:#000000;")
+            btn_style = (
+                "QPushButton { background: #e8e8e8; color: #223; border-radius: 8px; font-size: 15px; padding: 10px 0; }"
+                "QPushButton:hover { background: #d4d4d4; }"
+                "QPushButton:pressed { background: #c3c3c3; }"
+            )
+            self.updates_block.setStyleSheet("background: rgba(64,68,80,0.08); border-radius: 12px;")
+        self.manual_check_btn.setStyleSheet(btn_style)
+        self.download_button.setStyleSheet(btn_style)
+
+    def do_manual_update(self):
+        if self.manual_update_callback:
+            info = self.manual_update_callback()
+            self.update_info = info
+            self.last_manual_check = True
+            self.update_updates_block()
 
 class InfoDialog(QDialog):
     def __init__(self, parent=None, app_settings=None, on_settings_changed=None, update_info=None, manual_update_callback=None):
@@ -188,6 +267,107 @@ class InfoDialog(QDialog):
         self.setLayout(layout)
         self.apply_theme(self.theme)
 
-    # (Keep all methods from InfoDialog here, unchanged.)
-    # ... showEvent, closeEvent, eventFilter, apply_theme, paintEvent, resizeEvent, keyPressEvent
+    def showEvent(self, event):
+        if self.parent() and self.parent().isVisible():
+            parent_geom = self.parent().frameGeometry()
+            screen_geom = QApplication.desktop().screenGeometry(parent_geom.center())
+            popup_height = self.height()
+            below_top = parent_geom.bottom()
+            below_room = screen_geom.bottom() - below_top
+            if below_room >= popup_height:
+                x = parent_geom.center().x() - self.width() // 2
+                y = below_top
+            else:
+                above_bottom = parent_geom.top()
+                if (above_bottom - screen_geom.top()) >= popup_height:
+                    x = parent_geom.center().x() - self.width() // 2
+                    y = above_bottom - popup_height
+                else:
+                    x = screen_geom.center().x() - self.width() // 2
+                    y = screen_geom.center().y() - self.height() // 2
+            x = max(screen_geom.left(), min(x, screen_geom.right() - self.width()))
+            y = max(screen_geom.top(), min(y, screen_geom.bottom() - self.height()))
+            self.move(int(x), int(y))
+        else:
+            qr = self.frameGeometry()
+            cp = QApplication.desktop().screen().rect().center()
+            self.move(cp.x() - qr.width() // 2, cp.y() - qr.height() // 2)
+        super().showEvent(event)
+        QApplication.instance().installEventFilter(self)
 
+    def closeEvent(self, event):
+        QApplication.instance().removeEventFilter(self)
+        super().closeEvent(event)
+
+    def eventFilter(self, obj, event):
+        if event.type() == event.MouseButtonPress:
+            if not self.geometry().contains(event.globalPos()):
+                self.close()
+                return True
+        return super().eventFilter(obj, event)
+
+    def apply_theme(self, theme):
+        if theme == "dark":
+            bg = "#333333"
+            fg = "#e0e0e0"
+            border = "#393939"
+        else:
+            bg = "#fafafa"
+            fg = "#2b2b2b"
+            border = "#cccccc"
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {bg};
+                color: {fg};
+                border-radius: 24px;
+            }}
+            QLabel, QCheckBox, QComboBox {{
+                color: {fg};
+                background: transparent;
+            }}
+            QTabWidget::pane {{
+                background: transparent;
+            }}
+            QTabBar::tab {{
+                background: {bg};
+                color: {fg};
+                border-radius: 8px 8px 0 0;
+                min-width: 120px;
+                padding: 8px 2px;
+            }}
+            QTabBar::tab:selected {{
+                background: {border};
+                color: {fg};
+            }}
+            QPushButton {{
+                background: #313640;
+                color: #eee;
+                border-radius: 8px;
+            }}
+            QPushButton:hover {{
+                background: #374151;
+            }}
+        """)
+        help_html = load_markdown_html(doc_path("help_bg.md"), theme)
+        self.help_browser.setHtml(help_html)
+        about_html = load_markdown_html(doc_path("about_bg.md"), theme)
+        self.about_browser.setHtml(about_html)
+        self.theme = theme
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect())
+        path = QPainterPath()
+        path.addRoundedRect(rect, 24, 24)
+        painter.fillPath(path, QBrush(QColor("#222222" if self.theme == "dark" else "#fafafa")))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
