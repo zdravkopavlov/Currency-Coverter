@@ -1,6 +1,6 @@
 # converter_widget.py
 
-VERSION = "2.3.0"
+from version import VERSION
 
 from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, QApplication
 from PyQt5.QtCore import Qt

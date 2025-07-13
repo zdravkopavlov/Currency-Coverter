@@ -1,4 +1,4 @@
-VERSION = "2.3.0"
+from version import VERSION
 
 import sys
 import os

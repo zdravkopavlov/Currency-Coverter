@@ -1,4 +1,4 @@
-VERSION = "2.3.0"
+from version import VERSION
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QLabel, QComboBox, QPushButton, QSpacerItem, QSizePolicy,
