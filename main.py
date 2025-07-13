@@ -11,6 +11,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QObject
 
 from settings import load_settings, save_settings, get_theme
+from calculator import eur_to_bgn  # For correct BGN computation
 from converter_widget import ConverterWidget
 from change_widget import ChangeWidget
 from dialogs import InfoDialog
@@ -71,7 +72,10 @@ class MainEventFilter(QObject):
             if event.key() in (Qt.Key_Space, Qt.Key_Tab):
                 if idx == 0:
                     try:
-                        price = float(self.converter.input_value) if self.converter.input_value else 0.0
+                        if self.converter.bgn_to_eur_mode:
+                            price = float(self.converter.input_value) if self.converter.input_value else 0.0
+                        else:
+                            price = eur_to_bgn(float(self.converter.input_value)) if self.converter.input_value else 0.0
                     except ValueError:
                         price = 0.0
                     self.changer.set_price_bgn(price)
@@ -115,8 +119,8 @@ def main():
 
     # Main custom window
     app_win = AppWindow(icon, window_title, always_on_top=settings.get("always_on_top", True))
-    converter = ConverterWidget(app_win)
-    changer = ChangeWidget(app_win)
+    converter = ConverterWidget(app_win, settings)
+    changer = ChangeWidget(app_win, settings)
     app_win.addWidget(converter)
     app_win.addWidget(changer)
 
@@ -224,6 +228,11 @@ def main():
         app_win.move(x, y)
     minimal_mode = settings.get("minimal_mode", False)
     set_minimal_mode(minimal_mode)
+
+    # Restore direction
+    last_direction_bgn_to_eur = settings.get("last_direction_bgn_to_eur", True)
+    converter.bgn_to_eur_mode = last_direction_bgn_to_eur
+    converter.update_labels()
 
     theme_name = get_theme(settings)
     apply_theme(theme_name)

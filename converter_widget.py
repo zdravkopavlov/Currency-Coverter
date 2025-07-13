@@ -2,16 +2,17 @@
 
 VERSION = "2.3.0"
 
-from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
+from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, QApplication
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from calculator import bgn_to_eur, eur_to_bgn
 
 class ConverterWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings=None):
         super().__init__(parent)
-        self.bgn_to_eur_mode = True
+        self.settings = settings or {}
+        self.bgn_to_eur_mode = self.settings.get("last_direction_bgn_to_eur", True)
         self.input_value = ""
         self.minimal_mode = False
         self._open_updates_callback = None
@@ -92,6 +93,14 @@ class ConverterWidget(QWidget):
     def set_version_label_color(self, color):
         self.version_label.setStyleSheet(f"color:{color};")
 
+    @property
+    def auto_copy_enabled(self):
+        return self.settings.get("auto_copy_result", False)
+
+    @property
+    def remember_direction_enabled(self):
+        return self.settings.get("remember_last_direction", True)
+
     def set_mode(self, minimal):
         self.minimal_mode = minimal
         self._clear_layout()
@@ -124,7 +133,6 @@ class ConverterWidget(QWidget):
         self.update_labels()
 
     def _clear_layout(self):
-        # Remove all widgets and layouts from the layout
         while self.layout.count():
             item = self.layout.takeAt(0)
             widget = item.widget()
@@ -144,6 +152,10 @@ class ConverterWidget(QWidget):
 
     def toggle_direction(self):
         self.bgn_to_eur_mode = not self.bgn_to_eur_mode
+        if self.remember_direction_enabled:
+            self.settings["last_direction_bgn_to_eur"] = self.bgn_to_eur_mode
+            from settings import save_settings
+            save_settings(self.settings)
         self.input_value = ""
         self.update_labels()
 
@@ -152,17 +164,18 @@ class ConverterWidget(QWidget):
             val = float(self.input_value) if self.input_value else 0.0
         except ValueError:
             val = 0.0
-        output = "0.00"
         if self.bgn_to_eur_mode:
             self.input_label.setText(f"{val:.2f} лв.")
             eur = bgn_to_eur(val)
-            output = f"{eur:.2f}"
-            self.output_label.setText(f"€{output}")
+            self.output_label.setText(f"€{eur:.2f}")
+            result_text = f"{eur:.2f}"
         else:
             self.input_label.setText(f"€{val:.2f}")
             bgn = eur_to_bgn(val)
-            output = f"{bgn:.2f}"
-            self.output_label.setText(f"{output} лв.")
+            self.output_label.setText(f"{bgn:.2f} лв.")
+            result_text = f"{bgn:.2f}"
+        if self.auto_copy_enabled:
+            QApplication.clipboard().setText(result_text)
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -184,7 +197,6 @@ class ConverterWidget(QWidget):
             self.clearFocus()
             self.parentWidget().setFocus()
         elif key == Qt.Key_A and not event.modifiers():
-            # Let the main window handle always on top toggle
             self.clearFocus()
             self.parentWidget().setFocus()
         else:

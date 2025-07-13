@@ -352,6 +352,12 @@ class InfoDialog(QDialog):
         self.help_browser.setHtml(help_html)
         about_html = load_markdown_html(doc_path("about_bg.md"), theme)
         self.about_browser.setHtml(about_html)
+        if theme == "dark":
+            self.help_browser.setStyleSheet("background:#333333; color:#e0e0e0;")
+            self.about_browser.setStyleSheet("background:#333333; color:#e0e0e0;")
+        else:
+            self.help_browser.setStyleSheet("background:#fafafa; color:#2b2b2b;")
+            self.about_browser.setStyleSheet("background:#fafafa; color:#2b2b2b;")
         self.theme = theme
         self.update()
 

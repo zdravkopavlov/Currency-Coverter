@@ -2,18 +2,19 @@
 
 VERSION = "2.3.0"
 
-from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QApplication
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from calculator import calculate_change
 
 class ChangeWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings=None):
         super().__init__(parent)
         self.price_bgn = 0.0
         self.paid_bgn = ""
         self.minimal_mode = False
         self._open_updates_callback = None
+        self.settings = settings or {}
 
         # Fonts
         self.font_big = QFont("Arial", 24, QFont.Bold)
@@ -24,7 +25,6 @@ class ChangeWidget(QWidget):
         self.layout.setSpacing(8)
         self.layout.setContentsMargins(10, 5, 10, 5)
 
-        # Labels for normal mode
         self.given_label = QLabel("Дадена сума:")
         self.given_label.setFont(self.font_small)
 
@@ -72,6 +72,10 @@ class ChangeWidget(QWidget):
 
     def set_version_label_color(self, color):
         self.version_label.setStyleSheet(f"color:{color};")
+
+    @property
+    def auto_copy_enabled(self):
+        return self.settings.get("auto_copy_result", False)
 
     def set_mode(self, minimal):
         self.minimal_mode = minimal
@@ -135,8 +139,12 @@ class ChangeWidget(QWidget):
         if paid_val > 0 and self.price_bgn > 0:
             change_eur = calculate_change(self.price_bgn, paid_val)
             self.change_label.setText(f"€{change_eur:.2f}")
+            result_text = f"{change_eur:.2f}"
         else:
             self.change_label.setText("€0.00")
+            result_text = "0.00"
+        if self.auto_copy_enabled:
+            QApplication.clipboard().setText(result_text)
 
     def keyPressEvent(self, event):
         key = event.key()
