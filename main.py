@@ -123,6 +123,11 @@ def main():
     app_win = AppWindow(icon, window_title, always_on_top=settings.get("always_on_top", True))
     converter = ConverterWidget(app_win, settings)
     changer = ChangeWidget(app_win, settings)
+
+    # Set direction from settings as soon as widget is created (do not touch again)
+    converter.bgn_to_eur_mode = settings.get("last_direction_bgn_to_eur", True)
+    converter.update_labels()
+
     app_win.addWidget(converter)
     app_win.addWidget(changer)
 
@@ -230,11 +235,6 @@ def main():
         app_win.move(x, y)
     minimal_mode = settings.get("minimal_mode", False)
     set_minimal_mode(minimal_mode)
-
-    # Restore direction (saved in settings)
-    last_direction_bgn_to_eur = settings.get("last_direction_bgn_to_eur", True)
-    converter.bgn_to_eur_mode = last_direction_bgn_to_eur
-    converter.update_labels()
 
     theme_name = get_theme(settings)
     apply_theme(theme_name)
