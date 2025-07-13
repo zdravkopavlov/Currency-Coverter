@@ -22,26 +22,20 @@ class ConverterWidget(QWidget):
         self.font_medium = QFont("Arial", 18)
         self.font_small = QFont("Arial", 12)
 
-        # Layouts
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(8)
-        self.layout.setContentsMargins(10, 5, 10, 5)
-
-        # Input label
+        # Input label (amount)
         self.input_label = QLabel("0.00 лв.")
         self.input_label.setAlignment(Qt.AlignCenter)
         self.input_label.setFont(self.font_big)
 
         # Switch button
         self.switch_button = QPushButton("⇄")
-        self.switch_button.setFixedSize(48, 48)
         self.switch_button.setStyleSheet("""
             QPushButton {
-                font-size:32px;
+                font-size:24px;
                 color:#dddddd;
                 border:none;
                 background:#aaaaaa;
-                border-radius:24px;
+                border-radius:16px;
             }
             QPushButton:hover {
                 background:#cccccc;
@@ -49,7 +43,7 @@ class ConverterWidget(QWidget):
         """)
         self.switch_button.clicked.connect(self.toggle_direction)
 
-        # Output label
+        # Output label (converted)
         self.output_label = QLabel("€0.00")
         self.output_label.setAlignment(Qt.AlignCenter)
         self.output_label.setFont(self.font_big)
@@ -61,20 +55,12 @@ class ConverterWidget(QWidget):
         self.version_label.setCursor(Qt.PointingHandCursor)
         self.version_label.mousePressEvent = self._open_updates
 
-        # Main vertical layout (normal mode)
-        self.layout.addWidget(self.input_label)
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(self.switch_button)
-        btn_layout.addStretch()
-        self.layout.addLayout(btn_layout)
-        self.layout.addWidget(self.output_label)
-        self.layout.addWidget(self.version_label)
-
+        self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(8)
+        self.layout.setContentsMargins(10, 5, 10, 5)
+        self._build_layout(self.minimal_mode)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
-
-        self.set_mode(self.minimal_mode)
         self.update_labels()
 
     def set_open_updates_callback(self, callback):
@@ -103,25 +89,66 @@ class ConverterWidget(QWidget):
 
     def set_mode(self, minimal):
         self.minimal_mode = minimal
-        self._clear_layout()
+        self._build_layout(minimal)
+        self.update_labels()
+
+    def _build_layout(self, minimal):
+        while self.layout.count():
+            item = self.layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+            elif item.layout():
+                self._clear_sub_layout(item.layout())
         if minimal:
-            self.setFixedSize(300, 50)
+            self.setFixedSize(325, 50)
+            self.input_label.setFont(self.font_medium)
+            self.output_label.setFont(self.font_medium)
+            self.input_label.setAlignment(Qt.AlignCenter)
+            self.output_label.setAlignment(Qt.AlignCenter)
+            self.switch_button.setFixedSize(32, 32)
+            self.switch_button.setStyleSheet("""
+                QPushButton {
+                    font-size:18px;
+                    color:#dddddd;
+                    border:none;
+                    background:#aaaaaa;
+                    border-radius:16px;
+                }
+                QPushButton:hover {
+                    background:#cccccc;
+                }
+            """)
             h_layout = QHBoxLayout()
             h_layout.setContentsMargins(10, 5, 10, 5)
             h_layout.setSpacing(8)
-            self.input_label.setFont(self.font_medium)
-            self.output_label.setFont(self.font_medium)
+            h_layout.addStretch()
             h_layout.addWidget(self.input_label)
+            h_layout.addWidget(self.switch_button)
             h_layout.addWidget(self.output_label)
+            h_layout.addStretch()
             self.layout.addLayout(h_layout)
-            self.switch_button.hide()
+            self.switch_button.show()
             self.version_label.hide()
         else:
             self.setFixedSize(250, 220)
             self.input_label.setFont(self.font_big)
             self.output_label.setFont(self.font_big)
-            self.switch_button.show()
-            self.version_label.show()
+            self.input_label.setAlignment(Qt.AlignCenter)
+            self.output_label.setAlignment(Qt.AlignCenter)
+            self.switch_button.setFixedSize(48, 48)
+            self.switch_button.setStyleSheet("""
+                QPushButton {
+                    font-size:32px;
+                    color:#dddddd;
+                    border:none;
+                    background:#aaaaaa;
+                    border-radius:24px;
+                }
+                QPushButton:hover {
+                    background:#cccccc;
+                }
+            """)
             self.layout.addWidget(self.input_label)
             btn_layout = QHBoxLayout()
             btn_layout.addStretch()
@@ -130,16 +157,8 @@ class ConverterWidget(QWidget):
             self.layout.addLayout(btn_layout)
             self.layout.addWidget(self.output_label)
             self.layout.addWidget(self.version_label)
-        self.update_labels()
-
-    def _clear_layout(self):
-        while self.layout.count():
-            item = self.layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-            elif item.layout():
-                self._clear_sub_layout(item.layout())
+            self.switch_button.show()
+            self.version_label.show()
 
     def _clear_sub_layout(self, layout):
         while layout.count():
@@ -193,7 +212,9 @@ class ConverterWidget(QWidget):
         elif key == Qt.Key_Escape:
             self.input_value = ""
             self.update_labels()
-        elif key in (Qt.Key_Space, Qt.Key_Tab):
+        elif key == Qt.Key_Space:
+            self.toggle_direction()
+        elif key == Qt.Key_Tab:
             self.clearFocus()
             self.parentWidget().setFocus()
         elif key == Qt.Key_A and not event.modifiers():

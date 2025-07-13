@@ -15,29 +15,26 @@ class ChangeWidget(QWidget):
         self.minimal_mode = False
         self._open_updates_callback = None
         self.settings = settings or {}
+        self._last_copied = None  # For clipboard optimization
 
         # Fonts
         self.font_big = QFont("Arial", 24, QFont.Bold)
         self.font_medium = QFont("Arial", 18)
         self.font_small = QFont("Arial", 12)
 
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(8)
-        self.layout.setContentsMargins(10, 5, 10, 5)
-
-        self.given_label = QLabel("Дадена сума:")
-        self.given_label.setFont(self.font_small)
-
-        self.paid_label = QLabel("0.00 лв.")
-        self.paid_label.setAlignment(Qt.AlignCenter)
-        self.paid_label.setFont(self.font_big)
-
+        # Labels
         self.rest_label = QLabel("Ресто:")
         self.rest_label.setFont(self.font_small)
+        self.rest_label.setAlignment(Qt.AlignCenter)
 
         self.change_label = QLabel("€0.00")
         self.change_label.setAlignment(Qt.AlignCenter)
         self.change_label.setFont(self.font_big)
+
+        # Given (paid) label and field
+        self.paid_label = QLabel("0.00 лв.")
+        self.paid_label.setAlignment(Qt.AlignCenter)
+        self.paid_label.setFont(self.font_big)
 
         self.version_label = QLabel(f"версия {VERSION}")
         self.version_label.setAlignment(Qt.AlignCenter)
@@ -45,16 +42,18 @@ class ChangeWidget(QWidget):
         self.version_label.setCursor(Qt.PointingHandCursor)
         self.version_label.mousePressEvent = self._open_updates
 
-        self.layout.addWidget(self.given_label)
-        self.layout.addWidget(self.paid_label)
-        self.layout.addWidget(self.rest_label)
-        self.layout.addWidget(self.change_label)
-        self.layout.addWidget(self.version_label)
+        # (Normal mode only)
+        self.given_label = QLabel("Дадена сума:")
+        self.given_label.setFont(self.font_small)
+        self.given_label.setAlignment(Qt.AlignCenter)
 
+        self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(8)
+        self.layout.setContentsMargins(10, 5, 10, 5)
+
+        self._build_layout(self.minimal_mode)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
-
-        self.set_mode(self.minimal_mode)
         self.update_labels()
 
     def set_open_updates_callback(self, callback):
@@ -72,6 +71,9 @@ class ChangeWidget(QWidget):
 
     def set_version_label_color(self, color):
         self.version_label.setStyleSheet(f"color:{color};")
+        self.rest_label.setStyleSheet(f"color:{color};")
+        self.given_label.setStyleSheet(f"color:{color};")
+        self.paid_label.setStyleSheet(f"color:{color};")
 
     @property
     def auto_copy_enabled(self):
@@ -79,35 +81,10 @@ class ChangeWidget(QWidget):
 
     def set_mode(self, minimal):
         self.minimal_mode = minimal
-        self._clear_layout()
-        if minimal:
-            self.setFixedSize(300, 50)
-            h_layout = QHBoxLayout()
-            h_layout.setContentsMargins(10, 5, 10, 5)
-            h_layout.setSpacing(8)
-            self.paid_label.setFont(self.font_medium)
-            self.change_label.setFont(self.font_medium)
-            h_layout.addWidget(self.paid_label)
-            h_layout.addWidget(self.change_label)
-            self.layout.addLayout(h_layout)
-            self.given_label.hide()
-            self.rest_label.hide()
-            self.version_label.hide()
-        else:
-            self.setFixedSize(250, 220)
-            self.paid_label.setFont(self.font_big)
-            self.change_label.setFont(self.font_big)
-            self.given_label.show()
-            self.rest_label.show()
-            self.version_label.show()
-            self.layout.addWidget(self.given_label)
-            self.layout.addWidget(self.paid_label)
-            self.layout.addWidget(self.rest_label)
-            self.layout.addWidget(self.change_label)
-            self.layout.addWidget(self.version_label)
+        self._build_layout(minimal)
         self.update_labels()
 
-    def _clear_layout(self):
+    def _build_layout(self, minimal):
         while self.layout.count():
             item = self.layout.takeAt(0)
             widget = item.widget()
@@ -115,6 +92,40 @@ class ChangeWidget(QWidget):
                 widget.setParent(None)
             elif item.layout():
                 self._clear_sub_layout(item.layout())
+        if minimal:
+            self.setFixedSize(330, 50)
+            self.rest_label.setFont(self.font_small)
+            self.change_label.setFont(self.font_medium)
+            self.paid_label.setFont(self.font_medium)
+            h_layout = QHBoxLayout()
+            h_layout.setContentsMargins(10, 5, 10, 5)
+            h_layout.setSpacing(8)
+            h_layout.addStretch()
+            h_layout.addWidget(self.paid_label)
+            h_layout.addWidget(self.rest_label)
+            h_layout.addWidget(self.change_label)
+            h_layout.addStretch()
+            self.layout.addLayout(h_layout)
+            self.rest_label.show()
+            self.paid_label.show()
+            self.change_label.show()
+            self.version_label.hide()
+        else:
+            self.setFixedSize(250, 220)
+            self.given_label.setFont(self.font_small)
+            self.rest_label.setFont(self.font_small)
+            self.paid_label.setFont(self.font_big)
+            self.change_label.setFont(self.font_big)
+            self.layout.addWidget(self.given_label)
+            self.layout.addWidget(self.paid_label)
+            self.layout.addWidget(self.rest_label)
+            self.layout.addWidget(self.change_label)
+            self.layout.addWidget(self.version_label)
+            self.given_label.show()
+            self.rest_label.show()
+            self.paid_label.show()
+            self.change_label.show()
+            self.version_label.show()
 
     def _clear_sub_layout(self, layout):
         while layout.count():
@@ -143,8 +154,10 @@ class ChangeWidget(QWidget):
         else:
             self.change_label.setText("€0.00")
             result_text = "0.00"
-        if self.auto_copy_enabled:
+        # Clipboard optimization: Only copy if enabled, and value changed and nonzero
+        if self.auto_copy_enabled and result_text and result_text != self._last_copied and result_text != "0.00":
             QApplication.clipboard().setText(result_text)
+            self._last_copied = result_text
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -162,7 +175,7 @@ class ChangeWidget(QWidget):
         elif key == Qt.Key_Escape:
             self.paid_bgn = ""
             self.update_labels()
-        elif key in (Qt.Key_Space, Qt.Key_Tab):
+        elif key == Qt.Key_Tab:
             self.clearFocus()
             self.parentWidget().setFocus()
         elif key == Qt.Key_A and not event.modifiers():

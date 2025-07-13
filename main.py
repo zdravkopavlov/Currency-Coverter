@@ -48,7 +48,7 @@ def apply_theme_main(app_win, converter, changer, theme_name):
     converter.input_label.setStyleSheet(f"color:{fg}; background:transparent;")
     converter.output_label.setStyleSheet(f"color:{fg}; background:transparent;")
     converter.set_version_label_color(fg)
-    changer.paid_label.setStyleSheet(f"color:{fg}; background:transparent;")
+    changer.rest_label.setStyleSheet(f"color:{fg};")
     changer.change_label.setStyleSheet(f"color:{fg}; background:transparent;")
     changer.set_version_label_color(fg)
     app_win.update()
@@ -69,8 +69,9 @@ class MainEventFilter(QObject):
     def eventFilter(self, obj, event):
         if event.type() == event.KeyPress:
             idx = self.app_win.currentIndex()
-            if event.key() in (Qt.Key_Space, Qt.Key_Tab):
+            if event.key() == Qt.Key_Tab:
                 if idx == 0:
+                    # Go to change page
                     try:
                         if self.converter.bgn_to_eur_mode:
                             price = float(self.converter.input_value) if self.converter.input_value else 0.0
@@ -84,6 +85,7 @@ class MainEventFilter(QObject):
                     self.app_win.setCurrentIndex(1)
                     self.changer.setFocus()
                 else:
+                    # Go to converter page
                     self.app_win.setCurrentIndex(0)
                     self.converter.setFocus()
                 return True
@@ -132,7 +134,7 @@ def main():
         converter.set_mode(minimal)
         changer.set_mode(minimal)
         if minimal:
-            app_win.setFixedSize(300, 50)
+            app_win.setFixedSize(325, 50)
         else:
             app_win.setFixedSize(250, 220)
         if save:
@@ -229,7 +231,7 @@ def main():
     minimal_mode = settings.get("minimal_mode", False)
     set_minimal_mode(minimal_mode)
 
-    # Restore direction
+    # Restore direction (saved in settings)
     last_direction_bgn_to_eur = settings.get("last_direction_bgn_to_eur", True)
     converter.bgn_to_eur_mode = last_direction_bgn_to_eur
     converter.update_labels()
